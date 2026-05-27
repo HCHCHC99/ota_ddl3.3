@@ -18,7 +18,7 @@
   #include "Adapter_Can.h"
 
   /*=============================================================================
-   * ȫ��PWMʵ�������������ʹ�ã�?
+   * ȫ��PWMʵ�������������ʹ�ã�??
    *=============================================================================*/
   pwm_t g_motor_pwm_ch1;  // PB6
   pwm_t g_motor_pwm_ch2;  // PB7
@@ -65,7 +65,7 @@
                                   TMRA_MD_SAWTOOTH, TMRA_DIR_UP,
                                   6000, 0, PWM_ACTIVE_LOW);
 
-      // ����GPIO���裨������ú�������?
+      // ����GPIO���裨������ú�������??
       LL_PERIPH_WP(LL_PERIPH_GPIO);
 
       // ����FCG���裨ʹ�ܶ�ʱ��ʱ�ӣ�
@@ -77,7 +77,7 @@
       PWM_Start(&g_motor_pwm_ch3);
       PWM_Start(&g_motor_pwm_ch4);
 
-      // ʹ�����?
+      // ʹ�����??
       PWM_OutputCmd(&g_motor_pwm_ch1, PWM_OUTPUT_ENABLE);
       PWM_OutputCmd(&g_motor_pwm_ch2, PWM_OUTPUT_ENABLE);
       PWM_OutputCmd(&g_motor_pwm_ch3, PWM_OUTPUT_ENABLE);
@@ -95,9 +95,6 @@
   int main(void)
   {
       Hardware_Init();
-
-      /* CAN 初始化: PB14=RXCAN, PB15=TXCAN, 250kbps */
-      Can_Init();
 
       /* ͨ��ջ��ʼ�� (RS485 + Modbus RTU) */
       static const App_Comm_Config_t comm_cfg = {
@@ -118,7 +115,7 @@
       /* ��ʼ�����ϴ����������ĵ�ѹ/�����¼������¹����룩 */
       FaultHandler_Init();
 
-      /* ��ʼ�����PWM���ڵ���豸��ʼ��֮ǰ��? */
+      /* ��ʼ�����PWM���ڵ���豸��ʼ��֮ǰ��?? */
       Motor_Pwm_Init();
 
       /*=========================================================================
@@ -127,7 +124,7 @@
        *=========================================================================*/
       // volatile uint8_t motor_mode = 0;
 
-      // MotorDevice_t* motor = NULL;       // TODO: ��ȡ����豸ָ��?
+      // MotorDevice_t* motor = NULL;       // TODO: ��ȡ����豸ָ��??
       EventBus_Enable();
 	
       while (1)

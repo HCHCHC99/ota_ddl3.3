@@ -147,13 +147,34 @@
           //     Motor_OnArbitrationRev(motor, 0.0f);
           // }
 
-          /* CAN: receive frame and echo back same content */
+          /* Heartbeat: 1s interval, ID=0x12345678 */
           {
-              stc_can_rx_frame_t stcRx;
-              if (Can_Recv(&stcRx) == LL_OK) {
-                  Can_Send(stcRx.u32ID, stcRx.IDE, stcRx.au8Data, stcRx.DLC);
+              static NonBlockingDelay_t s_stcHbt;
+              static bool s_bHbtInited = false;
+              if (!s_bHbtInited) {
+                  nbDelay_Init(&s_stcHbt, 1000U);
+                  nbDelay_Start(&s_stcHbt);
+                  s_bHbtInited = true;
+              }
+              if (nbDelay_IsComplete(&s_stcHbt)) {
+                  CanMsg_t stcMsg;
+                  uint8_t au8Data[8] = {0x12, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78};
+                  uint8_t i;
+                  stcMsg.u32ID = 0x12345678UL;
+                  stcMsg.u8IDE  = 1U;
+                  stcMsg.u8RTR  = 0U;
+                  stcMsg.u8FDF  = 0U;
+                  stcMsg.u8BRS  = 0U;
+                  stcMsg.u8DLC  = 8U;
+                  for (i = 0U; i < 8U; i++) {
+                      stcMsg.au8Data[i] = au8Data[i];
+                  }
+                  CanIf_Send(&stcMsg);
+                  nbDelay_Start(&s_stcHbt);
               }
           }
+
+          CanIf_Poll();
 
         //   Param_PrintAllValues();
       }

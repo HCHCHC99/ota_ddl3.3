@@ -1,175 +1,242 @@
 #include "Adapter_Can.h"
+#include "TickTimer.h"
+#include "rtt_log.h"
 
 /*==============================================================================
  * Local definitions
  *============================================================================*/
-/* Acceptance filter: accept all frames */
-#define CAN_FILTER_NUM          (1U)
-#define CAN_FILTER_SEL          (CAN_FILTER1)
+#define CANIF_TX_QUEUE_SIZE         (32U)
+#define CANIF_TX_QUEUE_MASK         (CANIF_TX_QUEUE_SIZE - 1U)
 
-/* Interrupt selection */
-#define CAN_INT_SEL             (CAN_INT_PTB_TX | CAN_INT_RX | CAN_INT_ERR_INT)
+#define CANIF_MAX_RX_FILTERS        (16U)
 
-#define CAN_INT_SRC             (INT_SRC_CAN_INT)
-#define CAN_INT_IRQn            (INT122_IRQn)
+#define CANIF_BUSOFF_RECOVERY_MS    (500U)
 
 /*==============================================================================
  * Local variables
  *============================================================================*/
-static stc_can_rx_frame_t m_stcRxFrame;          /* Received frame buffer (ISR -> main loop) */
-static __IO uint8_t m_u8RxFlag = 0U;             /* 1 = new frame available in m_stcRxFrame */
-static __IO uint8_t m_u8TxBusy = 0U;             /* 1 = PTB transmission in progress */
+
+/* SW TX queue */
+static CanMsg_t     m_astcTxQueue[CANIF_TX_QUEUE_SIZE];
+static volatile uint8_t m_u8TxHead = 0U;
+static volatile uint8_t m_u8TxTail = 0U;
+
+/* RX filter table */
+static CanIf_RxFilterEntry_t m_astcRxFilters[CANIF_MAX_RX_FILTERS];
+static uint8_t m_u8RxFilterCount = 0U;
+
+/* Default RX callback (called when no filter matches) */
+static void (*m_pfnDefaultRxCallback)(const CanMsg_t *pMsg) = NULL;
+
+/* Bus-Off recovery timer */
+static NonBlockingDelay_t m_stcBusOffTimer;
 
 /*==============================================================================
  * Local function prototypes
  *============================================================================*/
-static void CanPinConfig(void);
-static void CanInitConfig(void);
-static void CanIrqConfig(void);
-static void CAN_IrqCallback(void);
+static void CanIf_TxCompleteCallback(void);
+static bool CanIf_MatchFilter(const CanMsg_t *pMsg, const CanIf_RxFilterEntry_t *pFilter);
+static void CanIf_DispatchRx(const CanMsg_t *pMsg);
+static void CanIf_DrainTxQueue(void);
+
+/* Default echo callback */
+static void CanIf_EchoCallback(const CanMsg_t *pMsg);
 
 /*==============================================================================
  * Public functions
  *============================================================================*/
 
-/*
- * Initialize CAN: PB14=RX, PB15=TX, 250kbps, normal mode
- * Call once from main() after Hardware_Init()
- */
-void Can_Init(void)
+void CanIf_Init(void)
 {
-    LL_PERIPH_WE(LL_PERIPH_GPIO | LL_PERIPH_FCG);
+    CanLLD_FilterConfig_t stcDefaultFilter = {
+        0UL, CAN_EXT_ID_MASK, CAN_ID_STD_EXT
+    };
 
-    CanPinConfig();
-    CanInitConfig();
-    CanIrqConfig();
+    /* Init LLD with accept-all filter */
+    CanLLD_Init(&stcDefaultFilter, 1U);
 
-    LL_PERIPH_WP(LL_PERIPH_GPIO | LL_PERIPH_FCG);
+    /* Register TX complete callback with LLD */
+    CanLLD_SetTxCompleteCallback(&CanIf_TxCompleteCallback);
+
+    /* Init Bus-Off recovery timer */
+    nbDelay_Init(&m_stcBusOffTimer, CANIF_BUSOFF_RECOVERY_MS);
+
+    /* Echo back all unmatched frames */
+    CanIf_SetDefaultRxCallback(&CanIf_EchoCallback);
 }
 
-/*
- * Send a CAN frame via PTB (primary transmit buffer).
- * Non-blocking: returns LL_ERR if previous TX still in progress.
- * u32ID: 11-bit std or 29-bit ext ID
- * u8IDE: 0=standard frame, 1=extended frame
- * pu8Data: pointer to data bytes
- * u8DLC: data length (0-8)
- */
-int32_t Can_Send(uint32_t u32ID, uint8_t u8IDE, uint8_t *pu8Data, uint8_t u8DLC)
+bool CanIf_Send(const CanMsg_t *pMsg)
 {
-    stc_can_tx_frame_t stcTx;
-    uint8_t i;
+    bool bResult = false;
 
-    if (m_u8TxBusy != 0U) {
-        return LL_ERR;
+    __disable_irq();
+
+    /* Try direct hardware send first */
+    if (CanLLD_Send(pMsg) == LL_OK) {
+        __enable_irq();
+        return true;
     }
 
-    stcTx.u32ID = u32ID;
-    stcTx.IDE   = u8IDE;
-    stcTx.RTR   = 0U;
-    stcTx.BRS   = 0U;
-    stcTx.FDF   = 0U;
-    stcTx.DLC   = u8DLC;
-    for (i = 0U; i < u8DLC; i++) {
-        stcTx.au8Data[i] = pu8Data[i];
+    /* Hardware busy: enqueue to SW TX queue */
+    {
+        uint8_t u8Next = (m_u8TxHead + 1U) & CANIF_TX_QUEUE_MASK;
+        if (u8Next != m_u8TxTail) {
+            m_astcTxQueue[m_u8TxHead] = *pMsg;
+            m_u8TxHead = u8Next;
+            bResult = true;
+        }
     }
 
-    (void)CAN_FillTxFrame(CAN_UNIT, CAN_TX_BUF_PTB, &stcTx);
-    CAN_StartTx(CAN_UNIT, CAN_TX_REQ_PTB);
-    m_u8TxBusy = 1U;
-
-    return LL_OK;
+    __enable_irq();
+    return bResult;
 }
 
-/*
- * Receive a CAN frame (non-blocking).
- * Returns LL_OK and fills *pstcRxFrame if a frame is available.
- * Returns LL_ERR if no frame available.
- */
-int32_t Can_Recv(stc_can_rx_frame_t *pstcRxFrame)
+void CanIf_Poll(void)
 {
-    if (m_u8RxFlag == 0U) {
-        return LL_ERR;
+    /* 1. Safety net: drain TX queue (ISR callback should keep it drained) */
+    CanIf_DrainTxQueue();
+
+    /* 2. Dispatch received frames */
+    {
+        CanMsg_t stcRxMsg;
+        while (CanLLD_GetRxFrame(&stcRxMsg) == LL_OK) {
+            CanIf_DispatchRx(&stcRxMsg);
+        }
     }
 
-    *pstcRxFrame = m_stcRxFrame;
-    m_u8RxFlag = 0U;
+    /* 3. Bus-Off recovery */
+    if (CanLLD_IsBusOff()) {
+        if (!m_stcBusOffTimer.isRunning) {
+            MAIN_D("[CANIF] Bus-Off detected, starting recovery timer (%ums)\r\n",
+                   CANIF_BUSOFF_RECOVERY_MS);
+            nbDelay_Start(&m_stcBusOffTimer);
+        }
+        if (nbDelay_IsComplete(&m_stcBusOffTimer)) {
+            MAIN_D("[CANIF] Bus-Off recovery: exiting local reset\r\n");
+            CanLLD_RecoverBusOff();
+        }
+    }
+}
 
-    return LL_OK;
+bool CanIf_RegisterRxFilter(const CanIf_RxFilterEntry_t *pEntry)
+{
+    if (m_u8RxFilterCount >= CANIF_MAX_RX_FILTERS) {
+        return false;
+    }
+    m_astcRxFilters[m_u8RxFilterCount] = *pEntry;
+    m_u8RxFilterCount++;
+    return true;
+}
+
+void CanIf_SetDefaultRxCallback(void (*pfnCallback)(const CanMsg_t *pMsg))
+{
+    m_pfnDefaultRxCallback = pfnCallback;
+}
+
+uint8_t CanIf_GetTxQueueCount(void)
+{
+    uint8_t u8Count;
+    __disable_irq();
+    u8Count = (m_u8TxHead - m_u8TxTail) & CANIF_TX_QUEUE_MASK;
+    __enable_irq();
+    return u8Count;
 }
 
 /*==============================================================================
  * Local functions
  *============================================================================*/
 
-/* Configure CAN TX/RX pins */
-static void CanPinConfig(void)
+/*
+ * TX complete callback (called from CAN ISR context).
+ * Dequeue next frame from SW TX queue and send via hardware.
+ */
+static void CanIf_TxCompleteCallback(void)
 {
-    GPIO_SetFunc(CAN_TX_PORT, CAN_TX_PIN, CAN_TX_PIN_FUNC);
-    GPIO_SetFunc(CAN_RX_PORT, CAN_RX_PIN, CAN_RX_PIN_FUNC);
+    if (m_u8TxHead != m_u8TxTail) {
+        CanMsg_t stcMsg = m_astcTxQueue[m_u8TxTail];
+        m_u8TxTail = (m_u8TxTail + 1U) & CANIF_TX_QUEUE_MASK;
+        (void)CanLLD_Send(&stcMsg);  /* PTB is free, guaranteed to succeed */
+    }
 }
 
-/* Configure CAN baudrate (250kbps) and acceptance filters */
-static void CanInitConfig(void)
+/*
+ * Check if a received message matches a registered filter entry.
+ * Mask bit=1 means "ignore this bit".
+ */
+static bool CanIf_MatchFilter(const CanMsg_t *pMsg, const CanIf_RxFilterEntry_t *pFilter)
 {
-    stc_can_init_t stcCanInit;
-    stc_can_filter_config_t astcFilter[CAN_FILTER_NUM] = {
-        {0UL, CAN_EXT_ID_MASK, CAN_ID_STD_EXT},     /* Accept all frames: mask=all-1s means ignore all ID bits */
-    };
+    uint32_t u32EffectiveMask;
 
-    (void)CAN_StructInit(&stcCanInit);
-    stcCanInit.stcBitCfg.u32Prescaler = CAN_PRESCALER;
-    stcCanInit.stcBitCfg.u32TimeSeg1  = CAN_TIME_SEG1;
-    stcCanInit.stcBitCfg.u32TimeSeg2  = CAN_TIME_SEG2;
-    stcCanInit.stcBitCfg.u32SJW       = CAN_SJW;
-    stcCanInit.pstcFilter             = astcFilter;
-    stcCanInit.u16FilterSelect        = CAN_FILTER_SEL;
-    stcCanInit.u8WorkMode             = CAN_WORK_MD_NORMAL;
-
-    FCG_Fcg1PeriphClockCmd(CAN_PERIPH_CLK, ENABLE);
-    (void)CAN_Init(CAN_UNIT, &stcCanInit);
-    CAN_IntCmd(CAN_UNIT, CAN_INT_ALL, DISABLE);
-    CAN_IntCmd(CAN_UNIT, CAN_INT_SEL, ENABLE);
-}
-
-/* Configure CAN interrupt */
-static void CanIrqConfig(void)
-{
-    stc_irq_signin_config_t stcIrq;
-
-    stcIrq.enIntSrc    = CAN_INT_SRC;
-    stcIrq.enIRQn      = CAN_INT_IRQn;
-    stcIrq.pfnCallback = &CAN_IrqCallback;
-    (void)INTC_IrqSignIn(&stcIrq);
-    NVIC_ClearPendingIRQ(stcIrq.enIRQn);
-    NVIC_SetPriority(stcIrq.enIRQn, CAN_INT_PRIO);
-    NVIC_EnableIRQ(stcIrq.enIRQn);
-}
-
-/* CAN interrupt callback */
-static void CAN_IrqCallback(void)
-{
-    uint32_t u32Status;
-
-    u32Status = CAN_GetStatusValue(CAN_UNIT);
-    if (u32Status != 0U) {
-        CAN_ClearStatus(CAN_UNIT, u32Status);
+    /* Format check */
+    if (pFilter->u8Format == CAN_ID_STD && pMsg->u8IDE != 0U) {
+        return false;
+    }
+    if (pFilter->u8Format == CAN_ID_EXT && pMsg->u8IDE == 0U) {
+        return false;
     }
 
-    if ((u32Status & CAN_FLAG_PTB_TX) != 0U) {
-        m_u8TxBusy = 0U;
+    /* ID match: mask bit=1 means don't-care */
+    u32EffectiveMask = ~(pFilter->u32CanMask);
+    if ((pMsg->u32ID & u32EffectiveMask) != (pFilter->u32CanId & u32EffectiveMask)) {
+        return false;
     }
 
-    if ((u32Status & CAN_FLAG_RX) != 0U) {
-        /* Read frame from hardware RX buffer into local buffer immediately */
-        if (CAN_GetRxFrame(CAN_UNIT, &m_stcRxFrame) == LL_OK) {
-            m_u8RxFlag = 1U;
+    return true;
+}
+
+/*
+ * Dispatch a received frame to matching registered callbacks.
+ * All matching filters are called (not just the first).
+ */
+static void CanIf_DispatchRx(const CanMsg_t *pMsg)
+{
+    uint8_t i;
+    bool bMatched = false;
+
+    for (i = 0U; i < m_u8RxFilterCount; i++) {
+        if (CanIf_MatchFilter(pMsg, &m_astcRxFilters[i])) {
+            m_astcRxFilters[i].pfnCallback(pMsg);
+            bMatched = true;
         }
     }
 
-    if ((u32Status & CAN_FLAG_ERR_INT) != 0U) {
-        if ((u32Status & CAN_FLAG_BUS_OFF) != 0U) {
-            CAN_ExitLocalReset(CAN_UNIT);
+    /* Fall back to default callback if no filter matched */
+    if (!bMatched && m_pfnDefaultRxCallback != NULL) {
+        m_pfnDefaultRxCallback(pMsg);
+    }
+}
+
+/*
+ * Safety net: drain one frame from SW TX queue in main loop context.
+ * Compensates for edge cases where ISR callback might miss a queue drain.
+ */
+static void CanIf_DrainTxQueue(void)
+{
+    CanMsg_t stcMsg;
+    bool bHasFrame = false;
+
+    __disable_irq();
+    if (m_u8TxHead != m_u8TxTail) {
+        stcMsg = m_astcTxQueue[m_u8TxTail];
+        m_u8TxTail = (m_u8TxTail + 1U) & CANIF_TX_QUEUE_MASK;
+        bHasFrame = true;
+    }
+    __enable_irq();
+
+    if (bHasFrame) {
+        if (CanLLD_Send(&stcMsg) != LL_OK) {
+            /* Hardware still busy, put frame back at front of queue */
+            __disable_irq();
+            m_u8TxTail = (m_u8TxTail - 1U) & CANIF_TX_QUEUE_MASK;
+            __enable_irq();
         }
     }
+}
+
+/*
+ * Default echo callback: send back received frame with same ID and data.
+ */
+static void CanIf_EchoCallback(const CanMsg_t *pMsg)
+{
+    (void)CanIf_Send(pMsg);
 }

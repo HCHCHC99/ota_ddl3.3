@@ -5,39 +5,56 @@
 extern "C" {
 #endif
 
-#include "hc32_ll.h"
+#include "Can_LLD.h"
 
-/* CAN unit */
-#define CAN_UNIT                (CM_CAN)
-#define CAN_PERIPH_CLK          (FCG1_PERIPH_CAN)
+/*==============================================================================
+ * RX filter entry for ID-based dispatch (registered by upper layers)
+ *============================================================================*/
+typedef struct {
+    uint32_t u32CanId;
+    uint32_t u32CanMask;     /* bit=1 means ignore this bit */
+    uint8_t  u8Format;       /* CAN_ID_STD / CAN_ID_EXT / CAN_ID_STD_EXT */
+    void   (*pfnCallback)(const CanMsg_t *pMsg);
+} CanIf_RxFilterEntry_t;
 
-/* CAN pin definitions: PB14=RXCAN, PB15=TXCAN */
-#define CAN_TX_PORT             (GPIO_PORT_B)
-#define CAN_TX_PIN              (GPIO_PIN_15)
-#define CAN_TX_PIN_FUNC         (GPIO_FUNC_50)
-
-#define CAN_RX_PORT             (GPIO_PORT_B)
-#define CAN_RX_PIN              (GPIO_PIN_14)
-#define CAN_RX_PIN_FUNC         (GPIO_FUNC_51)
+/*==============================================================================
+ * Public API
+ *============================================================================*/
 
 /*
- * CAN baudrate: 250k bit/s
- * CAN Clock = 8MHz, Prescaler=4, TimeSeg1=6, TimeSeg2=2
- * Baudrate = CANClock / (Prescaler * (TimeSeg1 + TimeSeg2))
- *          = 8MHz / (4 * 8) = 250kHz
- * Sample Point = (1 + TimeSeg1) / (1 + TimeSeg1 + TimeSeg2) = 7/9 ≈ 77.8%
+ * Initialize CanIf layer: init CanLLD with default "accept all" filter,
+ * set up TX complete callback, register default echo callback.
  */
-#define CAN_PRESCALER           (4U)
-#define CAN_TIME_SEG1           (6U)
-#define CAN_TIME_SEG2           (2U)
-#define CAN_SJW                 (2U)
+void CanIf_Init(void);
 
-/* CAN interrupt priority */
-#define CAN_INT_PRIO            (DDL_IRQ_PRIO_03)
+/*
+ * Send a CAN message asynchronously. Frame is enqueued in SW TX queue.
+ * Returns true if enqueued, false if queue is full.
+ */
+bool CanIf_Send(const CanMsg_t *pMsg);
 
-void Can_Init(void);
-int32_t Can_Send(uint32_t u32ID, uint8_t u8IDE, uint8_t *pu8Data, uint8_t u8DLC);
-int32_t Can_Recv(stc_can_rx_frame_t *pstcRxFrame);
+/*
+ * Main loop poll: drain SW TX queue + dispatch RX frames + Bus-Off recovery.
+ * Must be called periodically from main loop.
+ */
+void CanIf_Poll(void);
+
+/*
+ * Register an RX filter/callback pair. Up to 16 entries.
+ * Returns true on success, false if table is full.
+ */
+bool CanIf_RegisterRxFilter(const CanIf_RxFilterEntry_t *pEntry);
+
+/*
+ * Register a default RX callback (called when no filter matches).
+ * Set to NULL to discard unmatched frames.
+ */
+void CanIf_SetDefaultRxCallback(void (*pfnCallback)(const CanMsg_t *pMsg));
+
+/*
+ * Get SW TX queue pending count.
+ */
+uint8_t CanIf_GetTxQueueCount(void);
 
 #ifdef __cplusplus
 }

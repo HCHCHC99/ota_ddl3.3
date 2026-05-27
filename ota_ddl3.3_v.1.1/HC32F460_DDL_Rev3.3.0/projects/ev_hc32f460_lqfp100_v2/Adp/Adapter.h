@@ -30,6 +30,7 @@ extern "C" {
 #include "Adc.h"
 #include "Motor_hall.h"
 #include "rtt_log.h"
+#include "Adapter_Can.h"
 #ifdef __cplusplus
 }
 #endif

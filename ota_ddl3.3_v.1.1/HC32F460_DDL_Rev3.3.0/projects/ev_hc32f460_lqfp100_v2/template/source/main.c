@@ -15,9 +15,10 @@
   #include "rtt_manager.h"
   #include "Pwm.h"
   #include "hc32_ll_utility.h"
+  #include "Adapter_Can.h"
 
   /*=============================================================================
-   * ȫ��PWMʵ�������������ʹ�ã�
+   * ȫ��PWMʵ�������������ʹ�ã�?
    *=============================================================================*/
   pwm_t g_motor_pwm_ch1;  // PB6
   pwm_t g_motor_pwm_ch2;  // PB7
@@ -34,7 +35,7 @@
    *=============================================================================*/
   static void Motor_Pwm_Init(void)
   {
-      // ���������Ҫ4��ͨ��ȫ������Ч������תͨ��ռ�ձȷ���ʵ�֣�
+      // ����������?4��ͨ��ȫ������Ч������תͨ��ռ�ձȷ���ʵ�֣�
       // Ƶ�ʣ�20kHz����ʼռ�ձȣ�0%
 
       // ����GPIO���裨�����޸�GPIO�������ã�
@@ -64,7 +65,7 @@
                                   TMRA_MD_SAWTOOTH, TMRA_DIR_UP,
                                   6000, 0, PWM_ACTIVE_LOW);
 
-      // ����GPIO���裨������ú�������
+      // ����GPIO���裨������ú�������?
       LL_PERIPH_WP(LL_PERIPH_GPIO);
 
       // ����FCG���裨ʹ�ܶ�ʱ��ʱ�ӣ�
@@ -76,7 +77,7 @@
       PWM_Start(&g_motor_pwm_ch3);
       PWM_Start(&g_motor_pwm_ch4);
 
-      // ʹ�����
+      // ʹ�����?
       PWM_OutputCmd(&g_motor_pwm_ch1, PWM_OUTPUT_ENABLE);
       PWM_OutputCmd(&g_motor_pwm_ch2, PWM_OUTPUT_ENABLE);
       PWM_OutputCmd(&g_motor_pwm_ch3, PWM_OUTPUT_ENABLE);
@@ -94,6 +95,9 @@
   int main(void)
   {
       Hardware_Init();
+
+      /* CAN 初始化: PB14=RXCAN, PB15=TXCAN, 250kbps */
+      Can_Init();
 
       /* ͨ��ջ��ʼ�� (RS485 + Modbus RTU) */
       static const App_Comm_Config_t comm_cfg = {
@@ -114,7 +118,7 @@
       /* ��ʼ�����ϴ����������ĵ�ѹ/�����¼������¹����룩 */
       FaultHandler_Init();
 
-      /* ��ʼ�����PWM���ڵ���豸��ʼ��֮ǰ�� */
+      /* ��ʼ�����PWM���ڵ���豸��ʼ��֮ǰ��? */
       Motor_Pwm_Init();
 
       /*=========================================================================
@@ -123,9 +127,9 @@
        *=========================================================================*/
       // volatile uint8_t motor_mode = 0;
 
-      // MotorDevice_t* motor = NULL;       // TODO: ��ȡ����豸ָ��
+      // MotorDevice_t* motor = NULL;       // TODO: ��ȡ����豸ָ��?
       EventBus_Enable();
-
+	
       while (1)
       {
           ESystem_MainLoop();
@@ -145,6 +149,18 @@
           // } else if (motor_mode == 2) {
           //     Motor_OnArbitrationRev(motor, 0.0f);
           // }
+
+          /* CAN periodic send: every 1000ms, send a test frame (ID=0x123, std, 8 bytes) */
+          {
+              static uint32_t s_u32LastCanTxMs = 0;
+              uint32_t u32Now = tickTimer_GetCount();
+              if ((u32Now - s_u32LastCanTxMs) >= 1000UL) {
+                  s_u32LastCanTxMs = u32Now;
+                  uint8_t au8Data[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+                  Can_Send(0x123, 0, au8Data, 8);
+              }
+          }
+
           Param_PrintAllValues();
       }
   }

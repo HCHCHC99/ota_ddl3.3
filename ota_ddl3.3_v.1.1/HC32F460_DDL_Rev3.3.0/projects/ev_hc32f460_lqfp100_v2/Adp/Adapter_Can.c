@@ -5,6 +5,10 @@
 /*==============================================================================
  * Local definitions
  *============================================================================*/
+
+/* 回显功能：1=开启（未匹配的CAN帧回发），0=关闭 */
+#define CANIF_ECHO_ENABLE           (0U)
+
 #define CANIF_TX_QUEUE_SIZE         (32U)
 #define CANIF_TX_QUEUE_MASK         (CANIF_TX_QUEUE_SIZE - 1U)
 
@@ -61,8 +65,12 @@ void CanIf_Init(void)
     /* Init Bus-Off recovery timer */
     nbDelay_Init(&m_stcBusOffTimer, CANIF_BUSOFF_RECOVERY_MS);
 
-    /* Echo back all unmatched frames */
+    /* Echo back all unmatched frames (controlled by CANIF_ECHO_ENABLE) */
+#if CANIF_ECHO_ENABLE
     CanIf_SetDefaultRxCallback(&CanIf_EchoCallback);
+#else
+    CanIf_SetDefaultRxCallback(NULL);
+#endif
 }
 
 bool CanIf_Send(const CanMsg_t *pMsg)

@@ -713,6 +713,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\Adp\Comm_HAL.c</FilePath>
             </File>
+            <File>
+              <FileName>Adapter_Can.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Adp\Adapter_Can.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1573,6 +1578,11 @@
               <FileName>Comm_HAL.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Adp\Comm_HAL.c</FilePath>
+            </File>
+            <File>
+              <FileName>Adapter_Can.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Adp\Adapter_Can.c</FilePath>
             </File>
           </Files>
         </Group>

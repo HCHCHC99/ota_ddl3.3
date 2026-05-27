@@ -7,9 +7,6 @@
 #define CAN_FILTER_NUM          (1U)
 #define CAN_FILTER_SEL          (CAN_FILTER1)
 
-/* RX buffer count */
-#define CAN_RX_FRAME_NUM        (20U)
-
 /* Interrupt selection */
 #define CAN_INT_SEL             (CAN_INT_PTB_TX | CAN_INT_RX | CAN_INT_ERR_INT)
 
@@ -19,11 +16,9 @@
 /*==============================================================================
  * Local variables
  *============================================================================*/
-static stc_can_rx_frame_t m_astRxFrame[CAN_RX_FRAME_NUM];
-static __IO uint8_t m_u8RxFlag = 0U;
-static __IO uint8_t m_u8RxWriteIdx = 0U;
-static __IO uint8_t m_u8RxReadIdx = 0U;
-static __IO uint8_t m_u8TxBusy = 0U;
+static stc_can_rx_frame_t m_stcRxFrame;          /* Received frame buffer (ISR -> main loop) */
+static __IO uint8_t m_u8RxFlag = 0U;             /* 1 = new frame available in m_stcRxFrame */
+static __IO uint8_t m_u8TxBusy = 0U;             /* 1 = PTB transmission in progress */
 
 /*==============================================================================
  * Local function prototypes
@@ -93,22 +88,12 @@ int32_t Can_Send(uint32_t u32ID, uint8_t u8IDE, uint8_t *pu8Data, uint8_t u8DLC)
  */
 int32_t Can_Recv(stc_can_rx_frame_t *pstcRxFrame)
 {
-    int32_t i32Ret;
-
     if (m_u8RxFlag == 0U) {
         return LL_ERR;
     }
 
-    i32Ret = CAN_GetRxFrame(CAN_UNIT, pstcRxFrame);
-    if (i32Ret != LL_OK) {
-        m_u8RxFlag = 0U;
-        return LL_ERR;
-    }
-
-    /* Check if more frames remain in buffer */
-    if (CAN_GetRxFrame(CAN_UNIT, &m_astRxFrame[0]) != LL_OK) {
-        m_u8RxFlag = 0U;
-    }
+    *pstcRxFrame = m_stcRxFrame;
+    m_u8RxFlag = 0U;
 
     return LL_OK;
 }
@@ -176,7 +161,10 @@ static void CAN_IrqCallback(void)
     }
 
     if ((u32Status & CAN_FLAG_RX) != 0U) {
-        m_u8RxFlag = 1U;
+        /* Read frame from hardware RX buffer into local buffer immediately */
+        if (CAN_GetRxFrame(CAN_UNIT, &m_stcRxFrame) == LL_OK) {
+            m_u8RxFlag = 1U;
+        }
     }
 
     if ((u32Status & CAN_FLAG_ERR_INT) != 0U) {

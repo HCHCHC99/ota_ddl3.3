@@ -114,7 +114,7 @@ static void CanInitConfig(void)
 {
     stc_can_init_t stcCanInit;
     stc_can_filter_config_t astcFilter[CAN_FILTER_NUM] = {
-        {0UL, 0UL, CAN_ID_STD_EXT},     /* Accept all frames */
+        {0UL, CAN_EXT_ID_MASK, CAN_ID_STD_EXT},     /* Accept all frames: mask=all-1s means ignore all ID bits */
     };
 
     (void)CAN_StructInit(&stcCanInit);

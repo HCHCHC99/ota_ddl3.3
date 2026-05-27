@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>__DEBUG,HC32F460,USE_DDL_DRIVER,</Define>
               <Undefine></Undefine>
-              <IncludePath>../source;../../../../drivers/cmsis/Device/HDSC/hc32f4xx/Include;../../../../drivers/cmsis/Include;../../../../drivers/hc32_ll_driver/inc;..\..\RTT;..\..\Dev;..\..\Adp;..\..\App;..\..\Utils</IncludePath>
+              <IncludePath>../source;../../../../drivers/cmsis/Device/HDSC/hc32f4xx/Include;../../../../drivers/cmsis/Include;../../../../drivers/hc32_ll_driver/inc;..\..\RTT;..\..\Dev;..\..\Adp;..\..\App;..\..\Utils;..\..\UDS</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -723,6 +723,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\Adp\Can_LLD.c</FilePath>
             </File>
+            <File>
+              <FileName>flash_advanced.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Adp\flash_advanced.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -872,6 +877,36 @@
               <FileName>Params.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Utils\Params.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>UDS</GroupName>
+          <Files>
+            <File>
+              <FileName>flash_download.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\flash_download.c</FilePath>
+            </File>
+            <File>
+              <FileName>isotp_transport.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\isotp_transport.c</FilePath>
+            </File>
+            <File>
+              <FileName>security_access.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\security_access.c</FilePath>
+            </File>
+            <File>
+              <FileName>uds_diagnostic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\uds_diagnostic.c</FilePath>
+            </File>
+            <File>
+              <FileName>uds_dl_bridge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\uds_dl_bridge.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1594,6 +1629,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\Adp\Can_LLD.c</FilePath>
             </File>
+            <File>
+              <FileName>flash_advanced.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Adp\flash_advanced.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1743,6 +1783,36 @@
               <FileName>Params.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Utils\Params.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>UDS</GroupName>
+          <Files>
+            <File>
+              <FileName>flash_download.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\flash_download.c</FilePath>
+            </File>
+            <File>
+              <FileName>isotp_transport.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\isotp_transport.c</FilePath>
+            </File>
+            <File>
+              <FileName>security_access.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\security_access.c</FilePath>
+            </File>
+            <File>
+              <FileName>uds_diagnostic.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\uds_diagnostic.c</FilePath>
+            </File>
+            <File>
+              <FileName>uds_dl_bridge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\UDS\uds_dl_bridge.c</FilePath>
             </File>
           </Files>
         </Group>

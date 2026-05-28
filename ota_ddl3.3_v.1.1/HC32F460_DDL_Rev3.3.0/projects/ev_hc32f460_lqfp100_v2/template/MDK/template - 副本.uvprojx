@@ -49,7 +49,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>.\output\debug\</OutputDirectory>
-          <OutputName>template</OutputName>
+          <OutputName>boot</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
@@ -81,9 +81,9 @@
           </BeforeMake>
           <AfterMake>
             <RunUserProg1>0</RunUserProg1>
-            <RunUserProg2>0</RunUserProg2>
+            <RunUserProg2>1</RunUserProg2>
             <UserProg1Name></UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg2Name>fromelf.exe --bin --output ".\output\debug\@L.bin" ".\output\debug\@L.axf"</UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopA1X>0</nStopA1X>
@@ -276,7 +276,7 @@
               <OCR_RVCT4>
                 <Type>1</Type>
                 <StartAddress>0x0</StartAddress>
-                <Size>0x80000</Size>
+                <Size>0xc7ff</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
                 <Type>1</Type>
@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>__DEBUG,HC32F460,USE_DDL_DRIVER,</Define>
               <Undefine></Undefine>
-              <IncludePath>../source;../../../../drivers/cmsis/Device/HDSC/hc32f4xx/Include;../../../../drivers/cmsis/Include;../../../../drivers/hc32_ll_driver/inc;..\..\RTT;..\..\Dev;..\..\Adp;..\..\App;..\..\Utils;..\..\UDS</IncludePath>
+              <IncludePath>../source;../../../../drivers/cmsis/Device/HDSC/hc32f4xx/Include;../../../../drivers/cmsis/Include;../../../../drivers/hc32_ll_driver/inc;..\..\RTT;..\..\Dev;..\..\Adp;..\..\App;..\..\Utils;..\..\UDS;..\..\Bootloader_App</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -907,6 +907,16 @@
               <FileName>uds_dl_bridge.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\UDS\uds_dl_bridge.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Bootloader_App</GroupName>
+          <Files>
+            <File>
+              <FileName>Bootloader_App.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Bootloader_App\Bootloader_App.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1813,6 +1823,16 @@
               <FileName>uds_dl_bridge.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\UDS\uds_dl_bridge.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Bootloader_App</GroupName>
+          <Files>
+            <File>
+              <FileName>Bootloader_App.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Bootloader_App\Bootloader_App.c</FilePath>
             </File>
           </Files>
         </Group>

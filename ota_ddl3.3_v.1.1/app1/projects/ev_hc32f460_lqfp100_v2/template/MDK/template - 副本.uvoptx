@@ -120,6 +120,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
+          <Name>?</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -151,18 +152,18 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>180</LineNumber>
+          <LineNumber>1566</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>132088</Address>
+          <Address>112444</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\source\main.c</Filename>
+          <Filename>..\..\..\..\drivers\hc32_ll_driver\src\hc32_ll_clk.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\app1\../source/main.c\180</Expression>
+          <Expression>\\app1\../../../../drivers/hc32_ll_driver/src/hc32_ll_clk.c\1566</Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>

@@ -24,12 +24,12 @@
 #include "Bootloader_App.h"
 
 #if UDS_CAN_ENABLE
-  /* uds_dl_bridge.c 没有独立�? .h 文件，在此前向声�? */
+  /* uds_dl_bridge.c 没有独立�?? .h 文件，在此前向声�?? */
   extern void uds_dl_init_fw(void);
 #endif
 
   /*=============================================================================
-   * ȫ��PWMʵ�������������ʹ�ã�????
+   * ȫ��PWMʵ�������������ʹ�ã�?????
    *=============================================================================*/
   pwm_t g_motor_pwm_ch1;  // PB6
   pwm_t g_motor_pwm_ch2;  // PB7
@@ -76,7 +76,7 @@
                                   TMRA_MD_SAWTOOTH, TMRA_DIR_UP,
                                   6000, 0, PWM_ACTIVE_LOW);
 
-      // ����GPIO���裨������ú�������????
+      // ����GPIO���裨������ú�������?????
       LL_PERIPH_WP(LL_PERIPH_GPIO);
 
       // ����FCG���裨ʹ�ܶ�ʱ��ʱ�ӣ�
@@ -88,7 +88,7 @@
       PWM_Start(&g_motor_pwm_ch3);
       PWM_Start(&g_motor_pwm_ch4);
 
-      // ʹ�����????
+      // ʹ�����?????
       PWM_OutputCmd(&g_motor_pwm_ch1, PWM_OUTPUT_ENABLE);
       PWM_OutputCmd(&g_motor_pwm_ch2, PWM_OUTPUT_ENABLE);
       PWM_OutputCmd(&g_motor_pwm_ch3, PWM_OUTPUT_ENABLE);
@@ -101,13 +101,13 @@
   }
 
   /*=============================================================================
-   * 调试功能开�?
+   * 调试功能开�??
    *=============================================================================*/
 
   /* CAN 心跳包：1=开启（每秒发�? 0x12345678），0=关闭 */
   #define CAN_HEARTBEAT_ENABLE       (0U)
 
-/* UDS/CAN 功能总开关：1=启用 UDS 诊断+CAN 通信�?0=仅保�? Bootloader/APP */
+/* UDS/CAN 功能总开关：1=启用 UDS 诊断+CAN 通信�??0=仅保�?? Bootloader/APP */
 #define UDS_CAN_ENABLE             (0U)
 
   /*=============================================================================
@@ -115,12 +115,12 @@
    *=============================================================================*/
 
 #if UDS_CAN_ENABLE
-  /* ISOTP 重组后的 UDS 消息输出缓冲区（最�? 4096 字节�? */
+  /* ISOTP 重组后的 UDS 消息输出缓冲区（最�?? 4096 字节�?? */
   static uint8_t s_uds_rx_buffer[4100];
 
   /*
-   * ISOTP CAN RX 回调 �? �? CanIf 分发层在 RX 中断上下文外调用（main 循环中）�?
-   * �? CAN 帧送入 ISOTP 重组，完成后分发�? UDS 诊断层�?
+   * ISOTP CAN RX 回调 �?? �?? CanIf 分发层在 RX 中断上下文外调用（main 循环中）�??
+   * �?? CAN 帧送入 ISOTP 重组，完成后分发�?? UDS 诊断层�?
    */
   static void ISOTP_RxCallback(const CanMsg_t *pMsg)
   {
@@ -134,14 +134,14 @@
   }
 
   /*
-   * 注册 ISOTP 所需�? 4 �? CAN ID �? CanIf 过滤器�?
-   * ISOTP 过滤列表�?0x18DA03F1, 0x18DAF103, 0x18FF8118, 0x18DBFFF0
+   * 注册 ISOTP 所需�?? 4 �?? CAN ID �?? CanIf 过滤器�?
+   * ISOTP 过滤列表�??0x18DA03F1, 0x18DAF103, 0x18FF8118, 0x18DBFFF0
    */
   static void ISOTP_RegisterRxFilters(void)
   {
       static const uint32_t s_isotp_can_ids[4] = {
-          0x18DA03F1UL,  /* 物理寻址请求 ID (TBOX �? 控制�?) */
-          0x18DAF103UL,  /* 物理寻址响应 ID (控制�? �? TBOX) */
+          0x18DA03F1UL,  /* 物理寻址请求 ID (TBOX �?? 控制�??) */
+          0x18DAF103UL,  /* 物理寻址响应 ID (控制�?? �?? TBOX) */
           0x18FF8118UL,  /* OTA 专用 ID */
           0x18DBFFF0UL   /* 功能寻址请求 ID (广播) */
       };
@@ -182,7 +182,11 @@ int main(void)
     GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
     tickTimer_DelayMs(1000);
     GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
-
+    tickTimer_DelayMs(1000);
+    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
+    tickTimer_DelayMs(1000);
+    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
+		
     APP1_Main();
     while(1) { __nop(); }
 }

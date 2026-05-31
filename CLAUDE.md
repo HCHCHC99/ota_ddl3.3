@@ -168,39 +168,68 @@ Each firmware toggles a different GPIO at startup for visual identification:
 
 ## UDS OTA Flow (3-Phase Cross-Reset)
 
-OTA firmware download uses UDS services (0x31/0x34/0x36/0x37) and spans multiple resets:
+OTA firmware download uses UDS services (0x31/0x34/0x36/0x37/0x11) and spans multiple resets. Full details in `收发流程.md`.
 
 ### Phase 1: APP running → TBOX sends OTA
 1. TBOX sends UDS `0x31` (RoutineControl) to request OTA entry
-2. APP's UDS stack handles `0x31`, writes `UDS_PHASE_ENTER_BOOTLOADER` + target slot to UDS shared Flash sector
-3. APP calls `NVIC_SystemReset()`
+2. APP's UDS stack handles `0x31`, writes `UDS_PHASE_ENTER_BOOTLOADER` + `pending_sid=0x31` to UDS shared Flash sector
+3. APP calls `NVIC_SystemReset()` — **NO CAN response sent** (deferred to Phase 2)
 
 ### Phase 2: Bootloader → UDS Programming Mode
 1. Bootloader starts, checks UDS shared state → sees `ENTER_BOOTLOADER` phase
 2. Enters `Bootloader_UdsMain()`:
-   - Sends `0x31` positive response (`71 01 FF 00`) on CAN
+   - **Sends deferred `0x31` ACK** (`71 01 FF 00`) via ISOTP — this completes Phase 1's pending response
    - Initializes ISOTP, UDS, FlashDownload modules
+   - Handles `0x31` in bootloader context: calls `Boot_SetRunSlotToAddr(UDS_POST_FLASH_BOOT_ADDR)` → writes APP1 magic to `APP_RUN_SLOT_ADDR` (0x7C000)
    - Main loop: `CanIf_Poll()` → ISOTP RX → UDS dispatch → `FlashDownload_Task()` + WDT feed every 500ms
 3. TBOX sends `0x34` (RequestDownload) → `0x36` (TransferData) → `0x37` (RequestTransferExit)
 4. Firmware written to APP2 (0x4C000) via UDS_TARGET_FLASH_ADDR
 5. Main loop detects `FW_UPDATE_COMPLETE`, writes `phase=PROGRAMMING_DONE, result=1, target_slot=SLOT_APP2` to shared sector. Does NOT reset.
-6. TBOX sends `0x11` (ECU Reset) → Bootloader writes `pending_sid=0x11` to shared sector → `NVIC_SystemReset()` (NO CAN response)
+6. TBOX sends `0x11` (ECU Reset):
+   - Bootloader's `uds_handle_ecu_reset()` runs (VTOR==0)
+   - **Uses `MAIN_D()`** for all prints (not `UDS_I()` — ensures visibility regardless of `UDS_DEBUG`)
+   - Prints VTOR, reset_type, reads shared state (magic/phase/pending_sid)
+   - Writes `pending_sid=0x11` to shared sector, prints confirmation
+   - `*resp_len = 0` — **NO CAN response**, calls `NVIC_SystemReset()`
 
-### Phase 3: Bootloader → New APP
-1. Bootloader starts, `Boot_SetRunSlotToAddr(UDS_POST_FLASH_BOOT_ADDR)` sets APP_RUN_SLOT to APP1
-2. Jumps to APP1
-3. APP startup calls `App_CheckPendingUdsAck()`:
-   - If `pending_sid == 0x11`: sends deferred `51 01` (ECU Reset ACK) on CAN
-   - If `phase == PROGRAMMING_DONE`: reads fw info (size/CRC/result)
-   - Clears shared sector
+### Phase 3: Bootloader → APP1 → deferred 51 01 ACK
+1. Bootloader restarts, checks UDS shared state → phase is `PROGRAMMING_DONE`, NOT `ENTER_BOOTLOADER` → skips UDS mode
+2. Reads `APP_RUN_SLOT_ADDR` → sees APP1 magic (set in Phase 2) → jumps to APP1
+3. APP1 startup (before ISOTP init) calls `App_CheckPendingUdsAck()`:
+   - Reads shared Flash: `pending_sid == 0x11` → sends deferred `51 01` ACK
+   - **Uses raw `CanIf_Send()`** with manual ISOTP single-frame PCI byte `0x04` — ISOTP is NOT initialized at this point
+   - Frame: CAN ID=`0x18DAF103`, DLC=8, Data=`{0x04, 0x51, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}`
+   - Calls `UdsShared_Clear()` to erase shared sector
+
+### 0x11 Handler: Key Implementation Details
+
+The `uds_handle_ecu_reset()` in `uds_diagnostic.c` distinguishes Bootloader vs APP context via `SCB->VTOR`:
+
+- **Bootloader context (VTOR==0):** Deferred response pattern — writes `pending_sid=0x11` to shared Flash, sets `*resp_len=0` (no CAN response), calls `NVIC_SystemReset()`. The next APP that boots sends the actual `51 01` ACK.
+- **APP context (VTOR==APP1/APP2):** Direct response — fills `resp[0]=reset_type`, `*resp_len=1`, the normal UDS framework sends the positive response.
+
+**Debug prints use `MAIN_D()`** (not `UDS_I()`): `UDS_DEBUG` is never defined, so `UDS_I()`/`UDS_D()` compile to `(void)0`. `MAIN_D()` is always enabled, ensuring the 0x11 handler prints are visible regardless of build config.
+
+### App_CheckPendingUdsAck: ISOTP Constraint
+
+This function runs in APP startup **before `isotp_init()`**. It must send the deferred ACK via **raw CAN** with a manually constructed ISOTP single-frame PCI byte:
+
+```c
+// Correct: manual ISOTP SF, PCI=0x04 (4 bytes payload), DLC=8
+uint8_t au8Data[8] = {0x04, 0x51, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
+CanIf_Send(&stcMsg);  // raw CAN, not isotp_send_message()
+```
+
+Do NOT use `isotp_send_message()` here — ISOTP is not initialized yet. Do NOT omit the PCI byte `0x04` — the TBOX will interpret `0x51` as a reserved PCI type and discard the frame.
 
 ### Key OTA constraints
 - Flash download target is **APP2** (0x4C000), configured via `UDS_TARGET_FLASH_ADDR` / `FW_APP_START_ADDR` macros
-- After OTA download, boot slot forced to **APP1** (0x1A000) via `UDS_POST_FLASH_BOOT_ADDR` macro (development hardcode, plan to make dynamic)
+- After OTA download, boot slot forced to **APP1** (0x1A000) via `UDS_POST_FLASH_BOOT_ADDR` macro. To change the post-OTA boot target, edit `UDS_POST_FLASH_BOOT_ADDR` in all three copies of `Bootloader_App.h` (boot/, app1/, app2/). This is a development hardcode — the plan is to make it dynamic based on which slot received the new firmware.
 - `FlashDownload_Init()` in bootloader mode configures: `max_firmware_size=48KB`, `user_start_addr=UDS_TARGET_FLASH_ADDR` / `user_end_addr=UDS_TARGET_FLASH_ADDR+0xC000`
 - TBOX address mapping: `MAP_TBOX_ADDR_TO_FLASH(0x08004000)` → `0x0004C000` (APP2)
 - Context detection in UDS handlers: `SCB->VTOR == 0` = Bootloader, `SCB->VTOR == APP1/APP2_START_ADDR` = APP
-- Deferred response pattern: UDS handler that triggers reset sets `*resp_len = 0` (no CAN response), writes intent to shared Flash, then NVIC_SystemReset(). Next firmware sends the deferred ACK.
+- **Deferred response pattern:** UDS handler that triggers reset sets `*resp_len = 0` (no CAN response), writes intent (`pending_sid` or `phase`) to shared Flash, then `NVIC_SystemReset()`. The next firmware after reboot reads shared Flash and sends the deferred ACK.
+- **APP_RUN_SLOT_ADDR** (0x7C000) persists the active slot across resets. Set via `Boot_SetRunSlotToAddr()` during Phase 2 (0x31 handler in bootloader context). Read by `GetCurrentSlot()` in every `Boot_StartupSequence()`.
 
 ## Source Tree (within each boot/app1/app2 project)
 
@@ -259,6 +288,8 @@ Adp/Can_LLD.c/h           — Low-level CAN driver (CAN0 unit, FIFO, ISRs, Bus-O
 **CAN ID filter:** ISOTP filters 4 CAN IDs: `0x18DA03F1` (phys request), `0x18DAF103` (phys response), `0x18FF8118` (OTA), `0x18DBFFF0` (functional broadcast)
 
 **Security:** Seed/key algorithm (`seedkey_calc_lv1_key`) in `security_access.c`, 3-attempt lockout
+
+**UDS diagnostic source file warning:** `uds_diagnostic.c` is a large file (~650 lines, ~40KB) with GBK-encoded Chinese comments and CR (`\x0d`) line endings. Do NOT edit with standard text tools — use Python binary read/write with explicit encoding. The file was corrupted and rebuilt once (2026-05-31) due to a faulty find-and-replace that confused the forward declaration with the function definition. All three copies (boot/app1/app2) share identical UDS handler code.
 
 ## Key Architecture Patterns
 
@@ -335,6 +366,8 @@ When touching Modbus/Comm_HAL code, add bounds checks rather than relying on cal
 
 ## Documentation
 
+- `flash分区.md` — Flash partition layout with ASCII diagrams, code-to-flash mapping table, sector usage (English)
+- `收发流程.md` — Complete UDS OTA 3-phase flow with deferred ACK mechanism, timing diagrams, all step details (Chinese)
 - `ota_ddl3.3_v.1.1/通信栈架构说明.md` — Full 4-layer Modbus communication stack (Chinese)
 - `ota_ddl3.3_v.1.1/电流控制逻辑说明.md` — Over-current detection flow, dual blocking, fault recovery (Chinese)
 - `ota_ddl3.3_v.1.1/实时数据使用说明.md` — Real-time data register map and usage (Chinese)

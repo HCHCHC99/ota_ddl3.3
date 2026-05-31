@@ -9,6 +9,7 @@ JLinkLog.txt
 *.D99
 
 # Compiled objects
+*.i
 *.o
 *.obj
 *.axf

@@ -28,6 +28,9 @@
   extern void uds_dl_init_fw(void);
 #endif
 
+  /* 延迟复位：handler 设置为 DELAYED_RESET_MS，main 循环中倒计时 */
+  volatile uint32_t g_delayed_reset_ms = 0;
+
   /*=============================================================================
    * ȫ��PWMʵ�������������ʹ�ã�?????
    *=============================================================================*/
@@ -207,6 +210,14 @@ int main(void)
                 uint64_t current_tick = tickTimer_GetCount();
                 if (current_tick != s_last_ms_tick) {
                     s_last_ms_tick = current_tick;
+                    if (g_delayed_reset_ms > 0) {
+                        g_delayed_reset_ms--;
+                        if (g_delayed_reset_ms == 0) {
+                            MAIN_D("Delayed reset done, resetting...\r\n");
+                            NVIC_SystemReset();
+                            while(1);
+                        }
+                    }
                     isotp_ms_update();
                     uds_ms_update();
                     isotp_tx_process();

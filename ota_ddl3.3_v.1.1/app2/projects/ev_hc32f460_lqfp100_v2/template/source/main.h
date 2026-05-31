@@ -24,6 +24,10 @@
 
 #define UDS_CAN_ENABLE             (1U)
 
+/* Delayed reset: handlers set this to DELAYED_RESET_MS, main loop counts down */
+extern volatile uint32_t g_delayed_reset_ms;
+#define DELAYED_RESET_MS           (100U)
+
 #endif /* __MAIN_H__ */
 
 /*******************************************************************************

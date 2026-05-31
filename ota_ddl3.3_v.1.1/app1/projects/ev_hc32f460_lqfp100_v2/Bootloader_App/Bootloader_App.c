@@ -5,6 +5,7 @@
 #include "flash_download.h"
 #include "TickTimer.h"
 #include "rtt_log.h"
+#include "main.h"
 
 // ###########################################################################
 //
@@ -693,6 +694,14 @@ void Bootloader_UdsMain(void)
         /* 1ms 门控: ISOTP/UDS 超时管理 */
         if (tick != last_ms_tick) {
             last_ms_tick = tick;
+            if (g_delayed_reset_ms > 0) {
+                g_delayed_reset_ms--;
+                if (g_delayed_reset_ms == 0) {
+                    MAIN_D("Delayed reset done, resetting...\r\n");
+                    NVIC_SystemReset();
+                    while(1);
+                }
+            }
             isotp_ms_update();
             uds_ms_update();
             isotp_tx_process();

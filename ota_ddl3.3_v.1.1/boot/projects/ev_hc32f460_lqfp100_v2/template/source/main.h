@@ -22,7 +22,7 @@
 
 #include "hc32_ll.h"
 
-
+#define UDS_CAN_ENABLE             (1U)
 
 #endif /* __MAIN_H__ */
 

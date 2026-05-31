@@ -20,14 +20,27 @@ The firmware is split into **three independently-built images** under `ota_ddl3.
 
 Each directory is a self-contained Keil project with its own copy of the HC32F460 DDL (drivers, midwares, application source).
 
-## GBK Encoding Warning
+## File Encoding Warning
 
-**All `.c` and `.h` files use GBK encoding** (Chinese comments). Never edit them directly — use `iconv` to/from UTF-8:
+**Most `.c` and `.h` files use GBK encoding** (Chinese comments). However, **`Timer0_Unit2.c` files are UTF-16LE** (Keil MDK default for newly created files). Always check encoding before editing:
 
 ```bash
-iconv -f GBK -t UTF-8 file.c > file_utf8.c   # before editing
-iconv -f UTF-8 -t GBK file_utf8.c > file.c    # after editing
+file file.c   # check encoding first
 ```
+
+For GBK files:
+```bash
+iconv -f GBK -t UTF-8 file.c > file_utf8.c     # before editing
+iconv -f UTF-8 -t GBK file_utf8.c > file.c      # after editing
+```
+
+For UTF-16LE files:
+```bash
+iconv -f UTF-16LE -t UTF-8 file.c > file_utf8.c  # before editing
+iconv -f UTF-8 -t UTF-16LE file_utf8.c > file.c   # after editing
+```
+
+Never use `sed` directly on UTF-16LE files — it will corrupt them.
 
 ## Build System
 
@@ -84,28 +97,74 @@ iconv -f UTF-8 -t GBK file_utf8.c > file.c    # after editing
 8. **Select target slot** — prefer current slot if healthy, otherwise fall back to the other slot, or none if both disabled
 9. **Jump to APP** via `Bootloader_JumpToApp()` — sets MSP, VTOR, then branches to reset vector
 
+### Bootloader startup (`boot/template/source/main.c`)
+
+1. `Hardware_Init()` — system clock, GPIO, peripherals, Timer0 (1ms tick + WDT feeding)
+2. LED debug: toggle PB6 5 times (1s intervals) to indicate bootloader entry
+3. `Boot_StartupSequence()` — full check sequence, then jump to selected APP (does not return unless both slots disabled)
+4. Fallback `while(1) { __nop(); }` — reached only if both slots are disabled
+
 ### APP startup (each APP's own `main.c`)
 
-1. Set `SCB->VTOR` to its own Flash base address
-2. `Hardware_Init()` — system clock, GPIO, peripherals
-3. `App_CheckPendingUdsAck()` — if OTA just completed, send pending UDS ACK on CAN (e.g., `51 01` for ECU Reset)
-4. Main loop: read WDT feed control from shared RAM, feed SWDT if enabled
+1. Set `SCB->VTOR` to its own Flash base address (`APP1_START_ADDR` or `APP2_START_ADDR`)
+2. `__enable_irq()` — enable global interrupts (Timer0 starts WDT feeding)
+3. `Hardware_Init()` — system clock, GPIO, peripherals
+4. `MAIN_D(...)` — log which APP is running
+5. `App_CheckPendingUdsAck()` — if OTA just completed, send pending UDS ACK on CAN (e.g., `51 01` for ECU Reset)
+6. LED debug: toggle PB7 N times (APP1: 5 toggles, APP2: 2 toggles) to visually identify running slot
+7. Main `while(1) {}` — idle loop, all work done in interrupts (WDT via Timer0, CAN/RS485 via ISRs)
 
-**Key point:** `Bootloader_App` does NOT contain `main()` or application main loops. Each firmware's `main.c` owns its own flow.
+**Key point:** `Bootloader_App` does NOT contain `main()` or application main loops. Each firmware's `main.c` owns its own flow. The main loop is intentionally empty — WDT is fed in `TMR0_Unit2_IRQHandler`.
+
+### WDT feeding mechanism (interrupt-based)
+
+WDT feeding moved from main loop to `TMR0_Unit2_IRQHandler` (1ms timer interrupt):
+
+```c
+// Channel A, fires every 1ms:
+tickTimer_Update();                    // global 1ms tick
+s_wdt_cnt++;                            // increment counter
+if (s_wdt_cnt >= 500) {                 // every 500ms:
+    s_wdt_cnt = 0;
+    // Check shared RAM feed control based on current firmware identity:
+    if (SCB->VTOR == APP1_START_ADDR)   feed_ctrl = GetSharedCtrl()->app1_feed_ctrl;
+    else if (SCB->VTOR == APP2_START_ADDR) feed_ctrl = GetSharedCtrl()->app2_feed_ctrl;
+    // Bootloader (VTOR=0) always feeds; APP follows shared control:
+    if (feed_ctrl == WDT_FEED_ENABLE)   SWDT_FeedDog();
+}
+```
+
+- Uses `SCB->VTOR` to identify which firmware is running (bootloader=0, APP1=0x1A000, APP2=0x4C000)
+- Bootloader always feeds WDT unconditionally; APPs respect shared RAM control
+- This decouples WDT safety from main loop activity — WDT is fed even if main loop hangs
 
 ### WDT watchdog fallback
 
-Each APP independently feeds the SWDT. The bootloader tracks WDT reset count per-slot in Flash:
+Each APP has its WDT independently fed by the Timer0 interrupt. The bootloader tracks WDT reset count per-slot in Flash:
 - APP feeds WDT normally → count stays 0
 - APP crashes → WDT reset → bootloader increments count → if ≥3, slot disabled → bootloader switches to other slot
-- `SetWdtFeedControl()` allows disabling WDT feeding for a slot (e.g., during OTA)
+- `SetWdtFeedControl()` allows disabling WDT feeding for a slot via shared RAM (e.g., `WDT_FEED_DISABLE = 0xDEADBEEF`)
 
 ### Shared RAM control
 
 `stc_shared_ctrl_t` at `0x1FFF8000 + 0x2F000 - 0x100` (top of RAM, 32 bytes):
 - `app1_feed_ctrl` / `app2_feed_ctrl`: `WDT_FEED_ENABLE` (0) or `WDT_FEED_DISABLE` (0xDEADBEEF)
 - `debug_flag`: used to pass WDT feed control state from debugger reset to bootloader
-- APP main loop reads its feed_ctrl and only feeds WDT if enabled
+- WDT is fed in `TMR0_Unit2_IRQHandler` based on VTOR identity + shared RAM control, NOT in main loop
+
+### Slot switching: `Boot_SwitchAndRunOther()`
+
+Saves the opposite slot's magic to `APP_RUN_SLOT_ADDR` then calls `NVIC_SystemReset()`. On next boot, `Boot_StartupSequence()` reads the new magic and jumps to the other APP. Used for APP-to-APP switching without going through full bootloader logic in main.
+
+### LED debug indicators
+
+Each firmware toggles a different GPIO at startup for visual identification:
+
+| Firmware | GPIO | Toggle count | Duration |
+|----------|------|-------------|----------|
+| Bootloader | PB6 | 5 | ~5s |
+| APP1 | PB7 | 5 | ~2.5s |
+| APP2 | PB7 | 2 | ~1s |
 
 ## UDS OTA Flow (3-Phase Cross-Reset)
 
@@ -123,21 +182,25 @@ OTA firmware download uses UDS services (0x31/0x34/0x36/0x37) and spans multiple
    - Initializes ISOTP, UDS, FlashDownload modules
    - Main loop: `CanIf_Poll()` → ISOTP RX → UDS dispatch → `FlashDownload_Task()` + WDT feed every 500ms
 3. TBOX sends `0x34` (RequestDownload) → `0x36` (TransferData) → `0x37` (RequestTransferExit)
-4. Firmware written to the target APP slot's Flash region
-5. On `0x37` complete: writes `UDS_PHASE_PROGRAMMING_DONE` + `pending_sid=0x11` to UDS shared sector
-6. `NVIC_SystemReset()`
+4. Firmware written to APP2 (0x4C000) via UDS_TARGET_FLASH_ADDR
+5. Main loop detects `FW_UPDATE_COMPLETE`, writes `phase=PROGRAMMING_DONE, result=1, target_slot=SLOT_APP2` to shared sector. Does NOT reset.
+6. TBOX sends `0x11` (ECU Reset) → Bootloader writes `pending_sid=0x11` to shared sector → `NVIC_SystemReset()` (NO CAN response)
 
 ### Phase 3: Bootloader → New APP
-1. Bootloader starts, checks UDS shared state → sees `PROGRAMMING_DONE` (not ENTER_BOOTLOADER)
-2. Selects the newly-programmed slot as target, updates `APP_RUN_SLOT_ADDR`
-3. Jumps to new APP
-4. APP startup calls `App_CheckPendingUdsAck()` — if `pending_sid == 0x11`, sends `51 01` (ECU Reset ACK) on CAN, then clears UDS shared sector
+1. Bootloader starts, `Boot_SetRunSlotToAddr(UDS_POST_FLASH_BOOT_ADDR)` sets APP_RUN_SLOT to APP1
+2. Jumps to APP1
+3. APP startup calls `App_CheckPendingUdsAck()`:
+   - If `pending_sid == 0x11`: sends deferred `51 01` (ECU Reset ACK) on CAN
+   - If `phase == PROGRAMMING_DONE`: reads fw info (size/CRC/result)
+   - Clears shared sector
 
 ### Key OTA constraints
-- Bootloader writes to the **inactive** slot (if APP1 is running, OTA writes to APP2, and vice versa)
-- `FlashDownload_Init()` in bootloader mode configures: `max_firmware_size=48KB`, `user_start_addr=APP1_START_ADDR` / `user_end_addr=APP1_START_ADDR+0xC000`
-- `FW_FLASH_WRITE_ENABLED` in `flash_download.h` gates actual Flash writes (1=real, 0=dry run)
-- UDS shared sector (at `0x10000`) must be erased atomically — write all 56 bytes in one sector-erase+program cycle
+- Flash download target is **APP2** (0x4C000), configured via `UDS_TARGET_FLASH_ADDR` / `FW_APP_START_ADDR` macros
+- After OTA download, boot slot forced to **APP1** (0x1A000) via `UDS_POST_FLASH_BOOT_ADDR` macro (development hardcode, plan to make dynamic)
+- `FlashDownload_Init()` in bootloader mode configures: `max_firmware_size=48KB`, `user_start_addr=UDS_TARGET_FLASH_ADDR` / `user_end_addr=UDS_TARGET_FLASH_ADDR+0xC000`
+- TBOX address mapping: `MAP_TBOX_ADDR_TO_FLASH(0x08004000)` → `0x0004C000` (APP2)
+- Context detection in UDS handlers: `SCB->VTOR == 0` = Bootloader, `SCB->VTOR == APP1/APP2_START_ADDR` = APP
+- Deferred response pattern: UDS handler that triggers reset sets `*resp_len = 0` (no CAN response), writes intent to shared Flash, then NVIC_SystemReset(). Next firmware sends the deferred ACK.
 
 ## Source Tree (within each boot/app1/app2 project)
 

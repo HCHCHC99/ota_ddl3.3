@@ -16023,9 +16023,9 @@ static _Bool fw_is_address_valid(uint32_t address)
 {
 
      
-    uint32_t mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0001A000) : (address));
-    return (mapped_addr >= 0x0001A000 && 
-            mapped_addr < (0x0001A000 + 0x0000C000));
+    uint32_t mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0004C000) : (address));
+    return (mapped_addr >= 0x0004C000 && 
+            mapped_addr < (0x0004C000 + 0x0000C000));
 
 
 
@@ -16231,7 +16231,7 @@ FlashDownloadResult_t FlashDownload_OnRequestDownload(uint32_t address, uint32_t
     }
     
      
-    mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0001A000) : (address));
+    mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0004C000) : (address));
     
     SEGGER_RTT_printf(LOG_CH_MAIN, "\033[32m" "[%s] " ">>> OnRequestDownload: orig_addr=0x%08X, mapped_addr=0x%08X, size=%d bytes" "\033[0m" "\r\n", "FW",address, mapped_addr, size);
 
@@ -16563,7 +16563,7 @@ FlashDownloadResult_t FlashDownload_Erase(uint32_t address, uint32_t size)
     }
     
      
-    mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0001A000) : (address));
+    mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0004C000) : (address));
     
     if (!fw_is_address_valid(mapped_addr)) {
         SEGGER_RTT_printf(LOG_CH_MAIN, "\033[31m" "[%s] " "Erase: invalid address: orig=0x%08X, mapped=0x%08X" "\033[0m" "\r\n", "FW",address, mapped_addr);
@@ -16588,7 +16588,7 @@ FlashDownloadResult_t FlashDownload_CalculateCRC(uint32_t address, uint32_t size
     }
     
      
-    mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0001A000) : (address));
+    mapped_addr = (((address) >= 0x08004000 && (address) < 0x08010000) ? ((address) - 0x08004000 + 0x0004C000) : (address));
     
     if (!fw_is_address_valid(mapped_addr)) {
         SEGGER_RTT_printf(LOG_CH_MAIN, "\033[31m" "[%s] " "CRC: invalid address: orig=0x%08X, mapped=0x%08X" "\033[0m" "\r\n", "FW",address, mapped_addr);
@@ -16609,7 +16609,7 @@ FlashDownloadResult_t FlashDownload_CalculateCRC(uint32_t address, uint32_t size
 uint16_t FlashDownload_GetFirmwareVersion(void)
 {
     
-    uint32_t version_addr = 0x0001A000 + 0x10;
+    uint32_t version_addr = 0x0004C000 + 0x10;
     return (uint16_t)FlashAdv_ReadWord(g_fw_ctx.flash_handle, version_addr);
 }
 
@@ -16623,6 +16623,6 @@ uint16_t FlashDownload_GetBootloaderVersion(void)
 uint32_t FlashDownload_GetFirmwareCRC(void)
 {
     
-    uint32_t crc_addr = 0x0001A000 + 0x0000C000 - 4;
+    uint32_t crc_addr = 0x0004C000 + 0x0000C000 - 4;
     return FlashAdv_ReadWord(g_fw_ctx.flash_handle, crc_addr);
 }

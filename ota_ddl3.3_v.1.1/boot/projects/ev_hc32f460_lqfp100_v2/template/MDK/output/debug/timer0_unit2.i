@@ -20946,6 +20946,10 @@ extern __declspec(__nothrow) void _membitmovewb(void *  , const void *  , int  ,
 
 
 
+ 
+
+
+
 
 
 
@@ -21074,6 +21078,7 @@ int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
 void DisableAllNVICInterrupts(void);
 void Bootloader_JumpToApp(uint32_t u32AppAddr);
 void Boot_SwitchAndRunOther(void);
+void Boot_SetRunSlotToAddr(uint32_t u32Addr);
 void Bootloader_Delay(uint32_t u32Count);
 
 uint32_t GetWdtResetCount(uint32_t u32Addr);

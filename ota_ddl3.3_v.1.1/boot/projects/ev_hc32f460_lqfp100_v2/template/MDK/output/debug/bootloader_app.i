@@ -20817,6 +20817,10 @@ extern __declspec(__nothrow) void _membitmovewb(void *  , const void *  , int  ,
 
 
 
+ 
+
+
+
 
 
 
@@ -20945,6 +20949,7 @@ int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
 void DisableAllNVICInterrupts(void);
 void Bootloader_JumpToApp(uint32_t u32AppAddr);
 void Boot_SwitchAndRunOther(void);
+void Boot_SetRunSlotToAddr(uint32_t u32Addr);
 void Bootloader_Delay(uint32_t u32Count);
 
 uint32_t GetWdtResetCount(uint32_t u32Addr);
@@ -25434,6 +25439,24 @@ void Boot_SwitchAndRunOther(void)
     __NVIC_SystemReset();
 }
 
+void Boot_SetRunSlotToAddr(uint32_t u32Addr)
+{
+    uint32_t u32Magic;
+    if (u32Addr == 0x1A000)
+        u32Magic = 0x5A5A5A5Au;
+    else if (u32Addr == 0x4C000)
+        u32Magic = 0xA5A5A5A5u;
+    else
+        return;
+
+    EFM_REG_Unlock();
+    EFM_FWMC_Cmd(ENABLE);
+    while(SET != EFM_GetStatus(((0x00000100UL))));
+    EFM_SectorErase(0x7C000);
+    EFM_ProgramWord(0x7C000, u32Magic);
+    EFM_REG_Lock();
+}
+
 
 
 
@@ -25733,37 +25756,21 @@ void Bootloader_UdsMain(void)
 
      
     {
-        CanMsg_t stcMsg;
         uint8_t au8Data[4] = {0x71, 0x01, 0xFF, 0x00};
-        stcMsg.u32ID = 0x18DAF103UL;   
-        stcMsg.u8IDE  = 1U;
-        stcMsg.u8RTR  = 0U;
-        stcMsg.u8FDF  = 0U;
-        stcMsg.u8BRS  = 0U;
-        stcMsg.u8DLC  = 4U;
-        for (i = 0; i < 4; i++) stcMsg.au8Data[i] = au8Data[i];
-        CanIf_Send(&stcMsg);
-        SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  Sent 31 ACK (71 01 FF 00) on CAN ID 0x18DAF103\r\n" "\033[0m" "\r\n", "MAIN");
+        isotp_send_message(0, 0x18DAF103UL, au8Data, 4);
+        SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  Sent 31 ACK (71 01 FF 00) via ISOTP\r\n" "\033[0m" "\r\n", "MAIN");
     }
-
-     
-    isotp_init(0);
-    SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  ISOTP init done\r\n" "\033[0m" "\r\n", "MAIN");
-
-     
-    BL_ISOTP_RegisterRxFilters();
-    SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  ISOTP CAN filters registered\r\n" "\033[0m" "\r\n", "MAIN");
 
      
     memset(&(stcFwConfig), 0, sizeof(stcFwConfig));
     stcFwConfig.max_firmware_size     = 48UL * 1024UL;
     stcFwConfig.flash_sector_size    = 0x2000UL;
-    stcFwConfig.user_start_addr      = 0x1A000;
-    stcFwConfig.user_end_addr        = 0x1A000 + 0xC000UL;
+    stcFwConfig.user_start_addr      = 0x4C000;
+    stcFwConfig.user_end_addr        = 0x4C000 + 0xC000UL;
     stcFwConfig.verify_enabled       = 1U;
     stcFwConfig.auto_reset_on_complete = 0U;
     FlashDownload_Init(&stcFwConfig);
-    SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  FlashDownload init done (APP1: 0x%08X-0x%08X)\r\n" "\033[0m" "\r\n", "MAIN",0x1A000, 0x1A000 + 0xC000UL);
+    SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  FlashDownload init done (APP2: 0x%08X-0x%08X)\r\n" "\033[0m" "\r\n", "MAIN",0x4C000, 0x4C000 + 0xC000UL);
 
 
      
@@ -25777,6 +25784,8 @@ void Bootloader_UdsMain(void)
     SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  Entering UDS main loop (CAN poll + ISOTP/UDS + FlashDownload + WDT)\r\n" "\033[0m" "\r\n", "MAIN");
     last_ms_tick  = tickTimer_GetCount();
     last_wdt_feed = last_ms_tick;
+
+    static uint8_t s_uds_shared_written = 0;
 
     while (1) {
         uint64_t tick = tickTimer_GetCount();
@@ -25796,6 +25805,18 @@ void Bootloader_UdsMain(void)
         }
 
         FlashDownload_Task();
+
+        if (!s_uds_shared_written && FlashDownload_GetState() == FW_UPDATE_COMPLETE) {
+            stc_uds_shared_t state;
+            UdsShared_Read(&state);
+            state.phase = UDS_PHASE_PROGRAMMING_DONE;
+            state.result = 1;
+            state.target_slot = ((en_slot_type_t)0xA5A5A5A5u);
+            UdsShared_Write(&state);
+            s_uds_shared_written = 1;
+            SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  UDS shared updated: phase=PROGRAMMING_DONE\r\n" "\033[0m" "\r\n", "MAIN");
+        }
+
         CanIf_Poll();
     }
 }
@@ -25818,17 +25839,18 @@ void App_CheckPendingUdsAck(void)
 
     if (state.pending_sid == 0x11) {
         SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  Sending pending 11 01 ACK (51 01)\r\n" "\033[0m" "\r\n", "MAIN");
-         
+        
+ 
         CanMsg_t stcMsg;
-        uint8_t au8Data[4] = {0x51, 0x01, 0x00, 0x00};
+        uint8_t au8Data[8] = {0x04, 0x51, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
         uint8_t i;
         stcMsg.u32ID = 0x18DAF103UL;
         stcMsg.u8IDE  = 1U;
         stcMsg.u8RTR  = 0U;
         stcMsg.u8FDF  = 0U;
         stcMsg.u8BRS  = 0U;
-        stcMsg.u8DLC  = 4U;
-        for (i = 0; i < 4; i++) stcMsg.au8Data[i] = au8Data[i];
+        stcMsg.u8DLC  = 8U;
+        for (i = 0; i < 8; i++) stcMsg.au8Data[i] = au8Data[i];
         CanIf_Send(&stcMsg);
     }
 

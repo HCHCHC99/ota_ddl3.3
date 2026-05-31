@@ -325,6 +325,24 @@ void Boot_SwitchAndRunOther(void)
     NVIC_SystemReset();
 }
 
+void Boot_SetRunSlotToAddr(uint32_t u32Addr)
+{
+    uint32_t u32Magic;
+    if (u32Addr == APP1_START_ADDR)
+        u32Magic = SLOT_A_MAGIC;
+    else if (u32Addr == APP2_START_ADDR)
+        u32Magic = SLOT_B_MAGIC;
+    else
+        return;
+
+    EFM_REG_Unlock();
+    EFM_FWMC_Cmd(ENABLE);
+    while(SET != EFM_GetStatus(EFM_FLAG_RDY));
+    EFM_SectorErase(APP_RUN_SLOT_ADDR);
+    EFM_ProgramWord(APP_RUN_SLOT_ADDR, u32Magic);
+    EFM_REG_Lock();
+}
+
 // ###########################################################################
 //                          Bootloader ������
 // ###########################################################################
@@ -637,37 +655,31 @@ void Bootloader_UdsMain(void)
         MAIN_D("  Sent 31 ACK (71 01 FF 00) on CAN ID 0x18DAF103\r\n");
     }
 
-    /* ==== 2. 初始化 ISOTP 传输层 ==== */
-    isotp_init(0);
-    MAIN_D("  ISOTP init done\r\n");
-
-    /* ==== 3. 注册 ISOTP 的 CAN ID RX 过滤器 ==== */
-    BL_ISOTP_RegisterRxFilters();
-    MAIN_D("  ISOTP CAN filters registered\r\n");
-
-    /* ==== 4. 初始化固件下载模块 ==== */
+    /* ==== 2. 初始化固件下载模块 ==== */
     MEM_ZERO_STRUCT(stcFwConfig);
     stcFwConfig.max_firmware_size     = 48UL * 1024UL;
     stcFwConfig.flash_sector_size    = 0x2000UL;
-    stcFwConfig.user_start_addr      = APP1_START_ADDR;
-    stcFwConfig.user_end_addr        = APP1_START_ADDR + 0xC000UL;
+    stcFwConfig.user_start_addr      = UDS_TARGET_FLASH_ADDR;
+    stcFwConfig.user_end_addr        = UDS_TARGET_FLASH_ADDR + 0xC000UL;
     stcFwConfig.verify_enabled       = 1U;
     stcFwConfig.auto_reset_on_complete = 0U;
     FlashDownload_Init(&stcFwConfig);
-    MAIN_D("  FlashDownload init done (APP1: 0x%08X-0x%08X)\r\n",
-           APP1_START_ADDR, APP1_START_ADDR + 0xC000UL);
+    MAIN_D("  FlashDownload init done (APP2: 0x%08X-0x%08X)\r\n",
+           UDS_TARGET_FLASH_ADDR, UDS_TARGET_FLASH_ADDR + 0xC000UL);
 
-    /* ==== 5. 注册固件下载接口到 UDS ==== */
+    /* ==== 3. 注册固件下载接口到 UDS ==== */
     uds_dl_init_fw();
 
-    /* ==== 6. 初始化 UDS 诊断服务 ==== */
+    /* ==== 4. 初始化 UDS 诊断服务 ==== */
     uds_init();
     MAIN_D("  UDS init done\r\n");
 
-    /* ==== 7. 主循环 ==== */
+    /* ==== 5. 主循环 ==== */
     MAIN_D("  Entering UDS main loop (CAN poll + ISOTP/UDS + FlashDownload + WDT)\r\n");
     last_ms_tick  = tickTimer_GetCount();
     last_wdt_feed = last_ms_tick;
+
+    static uint8_t s_uds_shared_written = 0;
 
     while (1) {
         uint64_t tick = tickTimer_GetCount();
@@ -687,6 +699,18 @@ void Bootloader_UdsMain(void)
         }
 
         FlashDownload_Task();
+
+        if (!s_uds_shared_written && FlashDownload_GetState() == FW_UPDATE_COMPLETE) {
+            stc_uds_shared_t state;
+            UdsShared_Read(&state);
+            state.phase = UDS_PHASE_PROGRAMMING_DONE;
+            state.result = 1;
+            state.target_slot = SLOT_APP2;
+            UdsShared_Write(&state);
+            s_uds_shared_written = 1;
+            MAIN_D("  UDS shared updated: phase=PROGRAMMING_DONE\r\n");
+        }
+
         CanIf_Poll();
     }
 }
@@ -709,17 +733,18 @@ void App_CheckPendingUdsAck(void)
 
     if (state.pending_sid == 0x11) {
         MAIN_D("  Sending pending 11 01 ACK (51 01)\r\n");
-        /* 补发 11 01 的肯定响应 (51 01) */
+        /* 补发 11 01 的肯定响应 (51 01)
+         * ISOTP 单帧格式: PCI=0x04 (4字节数据) + 51 01 00 00, DLC=8 */
         CanMsg_t stcMsg;
-        uint8_t au8Data[4] = {0x51, 0x01, 0x00, 0x00};
+        uint8_t au8Data[8] = {0x04, 0x51, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00};
         uint8_t i;
         stcMsg.u32ID = 0x18DAF103UL;
         stcMsg.u8IDE  = 1U;
         stcMsg.u8RTR  = 0U;
         stcMsg.u8FDF  = 0U;
         stcMsg.u8BRS  = 0U;
-        stcMsg.u8DLC  = 4U;
-        for (i = 0; i < 4; i++) stcMsg.au8Data[i] = au8Data[i];
+        stcMsg.u8DLC  = 8U;
+        for (i = 0; i < 8; i++) stcMsg.au8Data[i] = au8Data[i];
         CanIf_Send(&stcMsg);
     }
 

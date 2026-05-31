@@ -24750,9 +24750,223 @@ _Bool isotp_get_filter_record(uint16_t index, uint32_t* can_id, uint8_t* data, u
 _Bool seedkey_calc_lv1_key(uint8_t *seed, uint8_t *key);
 
 #line 14 "..\\..\\UDS\\uds_diagnostic.c"
+#line 1 "..\\..\\Bootloader_App\\Bootloader_App.h"
+
+
+
+#line 5 "..\\..\\Bootloader_App\\Bootloader_App.h"
+#line 1 "../../../../drivers/cmsis/Include/core_cm4.h"
+ 
+
+
+
 
  
-#line 27 "..\\..\\UDS\\uds_diagnostic.c"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+#line 170 "../../../../drivers/cmsis/Include/core_cm4.h"
+
+
+
+#line 2128 "../../../../drivers/cmsis/Include/core_cm4.h"
+
+#line 6 "..\\..\\Bootloader_App\\Bootloader_App.h"
+#line 7 "..\\..\\Bootloader_App\\Bootloader_App.h"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+typedef uint32_t en_slot_type_t;
+
+
+
+
+typedef enum {
+    APP_STATE_AVAILABLE = 0,
+    APP_STATE_DISABLED = 1
+} en_app_state_t;
+
+typedef enum {
+    WDT_RESET_NONE = 0,
+    WDT_RESET_SWDT = 1,
+    WDT_RESET_WDT = 2
+} en_wdt_reset_type_t;
+
+typedef enum {
+    BOOT_STATUS_NORMAL = 0,
+    BOOT_STATUS_APP1_DISABLED = 1,
+    BOOT_STATUS_APP2_DISABLED = 2,
+    BOOT_STATUS_BOTH_DISABLED = 3
+} en_boot_status_t;
+
+typedef struct {
+    en_slot_type_t eSlot;
+    uint32_t u32WdtCount;
+    en_app_state_t eState;
+    uint32_t u32StartAddr;
+} stc_app_info_t;
+
+typedef struct {
+    en_wdt_reset_type_t eWdtResetType;
+    en_slot_type_t eCurrentSlot;
+    en_slot_type_t eTargetSlot;
+    stc_app_info_t stcApp1;
+    stc_app_info_t stcApp2;
+    uint8_t u8NeedUpdateSlotFlag;
+} stc_boot_context_t;
+
+
+
+
+
+
+
+
+
+
+typedef struct {
+    volatile uint32_t app1_feed_ctrl;
+    volatile uint32_t app2_feed_ctrl;
+    volatile uint32_t debug_flag;
+    volatile uint32_t reserved[5];
+} stc_shared_ctrl_t;
+
+static inline stc_shared_ctrl_t* GetSharedCtrl(void)
+{
+    return (stc_shared_ctrl_t*)(0x1FFF8000 + 0x2F000 - 0x100);
+}
+
+
+
+
+
+
+
+
+
+typedef enum {
+    UDS_PHASE_IDLE              = 0,   
+    UDS_PHASE_ENTER_BOOTLOADER  = 1,   
+    UDS_PHASE_PROGRAMMING_DONE  = 2,   
+} en_uds_phase_t;
+
+typedef struct {
+    uint32_t magic;             
+    uint32_t phase;             
+    uint32_t target_slot;       
+    uint32_t fw_size;           
+    uint32_t fw_crc;            
+    uint32_t result;            
+    uint32_t pending_sid;       
+    uint32_t reserved[7];       
+} stc_uds_shared_t;             
+
+
+void UdsShared_Read(stc_uds_shared_t *pState);
+void UdsShared_Write(const stc_uds_shared_t *pState);
+void UdsShared_Clear(void);
+void UdsShared_SetPhase(uint32_t phase, uint32_t target_slot);
+void App_CheckPendingUdsAck(void);
+
+
+void Bootloader_UdsMain(void);
+
+
+
+
+
+void Boot_StartupSequence(void);                
+
+void InitSharedCtrl(void);
+void Bootloader_Init(void);
+int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
+void DisableAllNVICInterrupts(void);
+void Bootloader_JumpToApp(uint32_t u32AppAddr);
+void Boot_SwitchAndRunOther(void);
+void Boot_SetRunSlotToAddr(uint32_t u32Addr);
+void Bootloader_Delay(uint32_t u32Count);
+
+uint32_t GetWdtResetCount(uint32_t u32Addr);
+void UpdateWdtResetCount(uint32_t u32Addr, uint32_t u32CurrentCount);
+void ClearWdtResetCount(uint32_t u32Addr);
+
+void SetWdtFeedControl(uint32_t u32Addr, uint32_t u32Value);
+uint32_t GetWdtFeedControl(uint32_t u32Addr);
+void ClearAppStateBySlot(en_slot_type_t eSlot);
+uint32_t READ_FLASH_DIRECT(uint32_t addr);
+
+
+void ClearAllRAM(void);
+
+#line 15 "..\\..\\UDS\\uds_diagnostic.c"
+
+ 
+#line 28 "..\\..\\UDS\\uds_diagnostic.c"
 
  
 static uds_ctrl_t g_uds_ctrl;
@@ -24766,26 +24980,6 @@ static void uds_write_data_by_id(uint16_t did, uint16_t value);
 
  
 static void uds_handle_diagnostic_session_control(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_ecu_reset(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_read_data_by_id(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_write_data_by_id(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_security_access(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_tester_present(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_read_dtc_info(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_clear_dtc(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-
- 
-static void uds_handle_routine_control(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_request_download(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_transfer_data(uint8_t* data, uint16_t len, uint8_t* resp, uint8_t* resp_len);
-static void uds_handle_request_transfer_exit(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len);
-
- 
-static void uds_start_routine(uint16_t rid, uint8_t* data, uint8_t len, uint32_t* result);
-static void uds_stop_routine(uint16_t rid);
-static uint32_t uds_get_routine_result(uint16_t rid);
-
- 
  
 static uint8_t uds_map_dl_result_to_nrc(uds_dl_result_t dl_result)
 {
@@ -24804,8 +24998,6 @@ static uint8_t uds_map_dl_result_to_nrc(uds_dl_result_t dl_result)
         default:                     return 0x10;
     }
 }
-
- 
 
  
 void uds_init(void)
@@ -24912,7 +25104,7 @@ void uds_ms_update(void)
     {
         print_cnt = 0;
         (void)0;
-#line 194 "..\\..\\UDS\\uds_diagnostic.c"
+#line 173 "..\\..\\UDS\\uds_diagnostic.c"
     }
 
 }
@@ -25108,64 +25300,56 @@ static void uds_handle_diagnostic_session_control(uint8_t* data, uint8_t len, ui
     (void)0;		
 }
 
- 
 static void uds_handle_ecu_reset(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len)
 {
     uint8_t reset_type;
-    
-    (void)0;
-    
+
+    SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " ">>> Handle 0x11 (ECU Reset), VTOR=0x%08X\r\n" "\033[0m" "\r\n", "MAIN",(unsigned int)((SCB_Type *) ((0xE000E000UL) + 0x0D00UL) )->VTOR);
+
     if (len < 2)
     {
         (void)0;
         uds_send_negative_response(0, data[0], 0x13);
         return;
     }
-    
+
     reset_type = data[1];
-    (void)0;
-    
-     
+    SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  reset_type=0x%02X\r\n" "\033[0m" "\r\n", "MAIN",reset_type);
+
     if (reset_type != 0x01 && reset_type != 0x03)
     {
         (void)0;
         uds_send_negative_response(0, data[0], 0x12);
         return;
     }
-    
-     
-    resp[0] = reset_type;
-    *resp_len = 1;
-    
-     
-    if (uds_dl_is_registered())
-    {
-        const uds_dl_if_t* dl = uds_dl_get_if();
-        dl->reset();
-        (void)0;
-    }
-    
-    if (reset_type == 0x03) {
-        (void)0;
+
+    if (((SCB_Type *) ((0xE000E000UL) + 0x0D00UL) )->VTOR == 0) {
+        SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  ECU Reset: Bootloader context, writing pending_sid=0x11 to flash\r\n" "\033[0m" "\r\n", "MAIN");
+        stc_uds_shared_t state;
+        UdsShared_Read(&state);
+        SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  Shared state: magic=0x%08X, phase=%d, pending_sid=0x%02X\r\n" "\033[0m" "\r\n", "MAIN",(unsigned int)state . magic, (int)state . phase, (unsigned int)state . pending_sid);
+
+        if (state.magic == 0x55445300UL) {
+            state.pending_sid = 0x11;
+            UdsShared_Write(&state);
+            SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  pending_sid=0x11 written to flash at 0x%08X\r\n" "\033[0m" "\r\n", "MAIN",(unsigned int)0x00010000);
+
+        } else {
+            SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  WARNING: magic mismatch (0x%08X), pending_sid NOT written!\r\n" "\033[0m" "\r\n", "MAIN",(unsigned int)state . magic);
+
+        }
+        *resp_len = 0;
+        SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  Resetting now...\r\n" "\033[0m" "\r\n", "MAIN");
+        __NVIC_SystemReset();
+        while(1);
     } else {
-        (void)0;
+        SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  ECU Reset: APP context, sending normal response\r\n" "\033[0m" "\r\n", "MAIN");
+        resp[0] = reset_type;
+        *resp_len = 1;
     }
-    
-     
-     
-    
 
-
-
-
-
-
-
- 
-     
 }
 
- 
 static void uds_handle_read_data_by_id(uint8_t* data, uint8_t len, uint8_t* resp, uint8_t* resp_len)
 {
     uint16_t did;
@@ -25290,6 +25474,18 @@ static void uds_handle_security_access(uint8_t* data, uint8_t len, uint8_t* resp
     {
         (void)0;
         
+        if (g_uds_ctrl.security_state == UDS_SECURITY_SEED_SENT)
+        {
+            (void)0;
+            resp[0] = sub_func;
+            resp[1] = (g_uds_ctrl.security_seed >> 24) & 0xFF;
+            resp[2] = (g_uds_ctrl.security_seed >> 16) & 0xFF;
+            resp[3] = (g_uds_ctrl.security_seed >> 8) & 0xFF;
+            resp[4] = g_uds_ctrl.security_seed & 0xFF;
+            *resp_len = 5;
+            return;
+        }
+
         if (g_uds_ctrl.security_state != UDS_SECURITY_LOCKED)
         {
             (void)0;
@@ -25312,6 +25508,14 @@ static void uds_handle_security_access(uint8_t* data, uint8_t len, uint8_t* resp
     else
     {
         (void)0;
+        
+        if (g_uds_ctrl.security_state == UDS_SECURITY_UNLOCKED)
+        {
+            (void)0;
+            resp[0] = sub_func;
+            *resp_len = 1;
+            return;
+        }
         
         if (g_uds_ctrl.security_state != UDS_SECURITY_SEED_SENT)
         {
@@ -25474,12 +25678,18 @@ static void uds_handle_routine_control(uint8_t* data, uint8_t len, uint8_t* resp
      
     
      
-    resp[0] = 0x71;
-    resp[1] = routine_ctrl_type;
-    *resp_len = 2;
-    
-    (void)0;
-    return;
+    if (((SCB_Type *) ((0xE000E000UL) + 0x0D00UL) )->VTOR == 0x1A000 || ((SCB_Type *) ((0xE000E000UL) + 0x0D00UL) )->VTOR == 0x4C000) {
+        UdsShared_SetPhase(UDS_PHASE_ENTER_BOOTLOADER, 0);
+        *resp_len = 0;
+        (void)0;
+        __NVIC_SystemReset();
+        while(1);
+    } else {
+        Boot_SetRunSlotToAddr(0x1A000);
+        resp[0] = routine_ctrl_type;
+        *resp_len = 1;
+        (void)0;
+    }
 }
 
  

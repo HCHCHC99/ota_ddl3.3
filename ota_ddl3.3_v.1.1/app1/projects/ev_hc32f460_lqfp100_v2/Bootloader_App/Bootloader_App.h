@@ -26,6 +26,10 @@
 #define APP2_START_ADDR                  0x4C000
 #define APP_RUN_SLOT_ADDR                0x7C000
 
+/* UDS OTA: flash target = APP2, post-flash forced boot = APP1 (macro for now) */
+#define UDS_TARGET_FLASH_ADDR            APP2_START_ADDR
+#define UDS_POST_FLASH_BOOT_ADDR         APP1_START_ADDR
+
 #define APP1_STATE_SECTOR_BASE           0x16000
 #define APP2_STATE_SECTOR_BASE           0x18000
 
@@ -154,6 +158,7 @@ int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
 void DisableAllNVICInterrupts(void);
 void Bootloader_JumpToApp(uint32_t u32AppAddr);
 void Boot_SwitchAndRunOther(void);
+void Boot_SetRunSlotToAddr(uint32_t u32Addr);
 void Bootloader_Delay(uint32_t u32Count);
 
 uint32_t GetWdtResetCount(uint32_t u32Addr);

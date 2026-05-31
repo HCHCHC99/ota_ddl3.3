@@ -20458,6 +20458,637 @@ uint64_t tickTimer_GetElapsedSinceLastCall(void);
 uint64_t tickTimer_GetRawTick(void);
 
 #line 10 "..\\..\\Adp\\Timer0_Unit2.c"
+#line 1 "..\\..\\Bootloader_App\\Bootloader_App.h"
+
+
+
+#line 5 "..\\..\\Bootloader_App\\Bootloader_App.h"
+#line 1 "../../../../drivers/cmsis/Include/core_cm4.h"
+ 
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+#line 170 "../../../../drivers/cmsis/Include/core_cm4.h"
+
+
+
+#line 2128 "../../../../drivers/cmsis/Include/core_cm4.h"
+
+#line 6 "..\\..\\Bootloader_App\\Bootloader_App.h"
+#line 1 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+ 
+ 
+ 
+ 
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+#line 38 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+
+
+  
+
+
+
+    typedef unsigned int size_t;    
+#line 54 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+
+
+
+
+extern __declspec(__nothrow) void *memcpy(void * __restrict  ,
+                    const void * __restrict  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+ 
+extern __declspec(__nothrow) void *memmove(void *  ,
+                    const void *  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+
+ 
+extern __declspec(__nothrow) char *strcpy(char * __restrict  , const char * __restrict  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+ 
+extern __declspec(__nothrow) char *strncpy(char * __restrict  , const char * __restrict  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) char *strcat(char * __restrict  , const char * __restrict  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+ 
+extern __declspec(__nothrow) char *strncat(char * __restrict  , const char * __restrict  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) int memcmp(const void *  , const void *  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+ 
+extern __declspec(__nothrow) int strcmp(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+ 
+extern __declspec(__nothrow) int strncmp(const char *  , const char *  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+ 
+extern __declspec(__nothrow) int strcasecmp(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+ 
+extern __declspec(__nothrow) int strncasecmp(const char *  , const char *  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+ 
+extern __declspec(__nothrow) int strcoll(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) size_t strxfrm(char * __restrict  , const char * __restrict  , size_t  ) __attribute__((__nonnull__(2)));
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+#line 193 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+extern __declspec(__nothrow) void *memchr(const void *  , int  , size_t  ) __attribute__((__nonnull__(1)));
+
+   
+
+
+
+
+
+ 
+
+#line 209 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+extern __declspec(__nothrow) char *strchr(const char *  , int  ) __attribute__((__nonnull__(1)));
+
+   
+
+
+
+
+ 
+
+extern __declspec(__nothrow) size_t strcspn(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+ 
+
+#line 232 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+extern __declspec(__nothrow) char *strpbrk(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+
+   
+
+
+
+
+ 
+
+#line 247 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+extern __declspec(__nothrow) char *strrchr(const char *  , int  ) __attribute__((__nonnull__(1)));
+
+   
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) size_t strspn(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+ 
+
+#line 270 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+extern __declspec(__nothrow) char *strstr(const char *  , const char *  ) __attribute__((__nonnull__(1,2)));
+
+   
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) char *strtok(char * __restrict  , const char * __restrict  ) __attribute__((__nonnull__(2)));
+extern __declspec(__nothrow) char *_strtok_r(char *  , const char *  , char **  ) __attribute__((__nonnull__(2,3)));
+
+extern __declspec(__nothrow) char *strtok_r(char *  , const char *  , char **  ) __attribute__((__nonnull__(2,3)));
+
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) void *memset(void *  , int  , size_t  ) __attribute__((__nonnull__(1)));
+   
+
+
+
+ 
+extern __declspec(__nothrow) char *strerror(int  );
+   
+
+
+
+
+
+ 
+extern __declspec(__nothrow) size_t strlen(const char *  ) __attribute__((__nonnull__(1)));
+   
+
+
+
+ 
+
+extern __declspec(__nothrow) size_t strlcpy(char *  , const char *  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) size_t strlcat(char *  , const char *  , size_t  ) __attribute__((__nonnull__(1,2)));
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+extern __declspec(__nothrow) void _membitcpybl(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitcpybb(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitcpyhl(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitcpyhb(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitcpywl(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitcpywb(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitmovebl(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitmovebb(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitmovehl(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitmovehb(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitmovewl(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+extern __declspec(__nothrow) void _membitmovewb(void *  , const void *  , int  , int  , size_t  ) __attribute__((__nonnull__(1,2)));
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+#line 502 "F:\\Keil5\\ARM\\ARMCC\\Bin\\..\\include\\string.h"
+
+
+
+ 
+
+#line 7 "..\\..\\Bootloader_App\\Bootloader_App.h"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+typedef uint32_t en_slot_type_t;
+
+
+
+
+typedef enum {
+    APP_STATE_AVAILABLE = 0,
+    APP_STATE_DISABLED = 1
+} en_app_state_t;
+
+typedef enum {
+    WDT_RESET_NONE = 0,
+    WDT_RESET_SWDT = 1,
+    WDT_RESET_WDT = 2
+} en_wdt_reset_type_t;
+
+typedef enum {
+    BOOT_STATUS_NORMAL = 0,
+    BOOT_STATUS_APP1_DISABLED = 1,
+    BOOT_STATUS_APP2_DISABLED = 2,
+    BOOT_STATUS_BOTH_DISABLED = 3
+} en_boot_status_t;
+
+typedef struct {
+    en_slot_type_t eSlot;
+    uint32_t u32WdtCount;
+    en_app_state_t eState;
+    uint32_t u32StartAddr;
+} stc_app_info_t;
+
+typedef struct {
+    en_wdt_reset_type_t eWdtResetType;
+    en_slot_type_t eCurrentSlot;
+    en_slot_type_t eTargetSlot;
+    stc_app_info_t stcApp1;
+    stc_app_info_t stcApp2;
+    uint8_t u8NeedUpdateSlotFlag;
+} stc_boot_context_t;
+
+
+
+
+
+
+
+
+
+
+typedef struct {
+    volatile uint32_t app1_feed_ctrl;
+    volatile uint32_t app2_feed_ctrl;
+    volatile uint32_t debug_flag;
+    volatile uint32_t reserved[5];
+} stc_shared_ctrl_t;
+
+static inline stc_shared_ctrl_t* GetSharedCtrl(void)
+{
+    return (stc_shared_ctrl_t*)(0x1FFF8000 + 0x2F000 - 0x100);
+}
+
+
+
+
+
+
+
+
+
+typedef enum {
+    UDS_PHASE_IDLE              = 0,   
+    UDS_PHASE_ENTER_BOOTLOADER  = 1,   
+    UDS_PHASE_PROGRAMMING_DONE  = 2,   
+} en_uds_phase_t;
+
+typedef struct {
+    uint32_t magic;             
+    uint32_t phase;             
+    uint32_t target_slot;       
+    uint32_t fw_size;           
+    uint32_t fw_crc;            
+    uint32_t result;            
+    uint32_t pending_sid;       
+    uint32_t reserved[7];       
+} stc_uds_shared_t;             
+
+
+void UdsShared_Read(stc_uds_shared_t *pState);
+void UdsShared_Write(const stc_uds_shared_t *pState);
+void UdsShared_Clear(void);
+void UdsShared_SetPhase(uint32_t phase, uint32_t target_slot);
+void App_CheckPendingUdsAck(void);
+
+
+void Bootloader_UdsMain(void);
+
+
+
+
+
+void Boot_StartupSequence(void);                
+
+void InitSharedCtrl(void);
+void Bootloader_Init(void);
+int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
+void DisableAllNVICInterrupts(void);
+void Bootloader_JumpToApp(uint32_t u32AppAddr);
+void Boot_SwitchAndRunOther(void);
+void Bootloader_Delay(uint32_t u32Count);
+
+uint32_t GetWdtResetCount(uint32_t u32Addr);
+void UpdateWdtResetCount(uint32_t u32Addr, uint32_t u32CurrentCount);
+void ClearWdtResetCount(uint32_t u32Addr);
+
+void SetWdtFeedControl(uint32_t u32Addr, uint32_t u32Value);
+uint32_t GetWdtFeedControl(uint32_t u32Addr);
+void ClearAppStateBySlot(en_slot_type_t eSlot);
+uint32_t READ_FLASH_DIRECT(uint32_t addr);
+
+
+void ClearAllRAM(void);
+
+#line 11 "..\\..\\Adp\\Timer0_Unit2.c"
 
 
 
@@ -20628,10 +21259,27 @@ static void TMR0_Unit2_IRQHandler(void)
 {
     if (TMR0_GetStatus((((CM_TMR0_TypeDef *)(0x40024400UL))), ((0x00000001UL))) == SET) {
         TMR0_ClearStatus((((CM_TMR0_TypeDef *)(0x40024400UL))), ((0x00000001UL)));
-        tickTimer_Update();   
-        
+        tickTimer_Update();
+        {
+            static uint32_t s_wdt_cnt = 0;
+            s_wdt_cnt++;
+            if (s_wdt_cnt >= 500) {
+                s_wdt_cnt = 0;
+                stc_shared_ctrl_t *pCtrl = GetSharedCtrl();
+                uint32_t feed_ctrl = 0x00000000u;
+                uint32_t vtor = ((SCB_Type *) ((0xE000E000UL) + 0x0D00UL) )->VTOR;
+                if (vtor == 0x1A000) {
+                    feed_ctrl = pCtrl->app1_feed_ctrl;
+                } else if (vtor == 0x4C000) {
+                    feed_ctrl = pCtrl->app2_feed_ctrl;
+                }
+                if (feed_ctrl == 0x00000000u) {
+                    SWDT_FeedDog();
+                }
+            }
+        }
     }
-    
+
     if (TMR0_GetStatus((((CM_TMR0_TypeDef *)(0x40024400UL))), ((0x00010000UL))) == SET) {
         TMR0_ClearStatus((((CM_TMR0_TypeDef *)(0x40024400UL))), ((0x00010000UL)));
          

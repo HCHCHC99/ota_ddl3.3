@@ -186,6 +186,6 @@ int main(void)
     tickTimer_DelayMs(1000);
     GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_06);
 
-    Bootloader_Main();
+    Boot_StartupSequence();
     while(1) { __nop(); }
 }

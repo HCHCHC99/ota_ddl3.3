@@ -176,17 +176,19 @@ int main(void)
     __enable_irq();
     Hardware_Init();
     MAIN_D("===== main(): APP1 PATH =====\r\n");
+    App_CheckPendingUdsAck();
+	tickTimer_DelayMs(500);
+	GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
+	tickTimer_DelayMs(500);
+	GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
+	tickTimer_DelayMs(500);
+	GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
+	tickTimer_DelayMs(500);
+	GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
+	tickTimer_DelayMs(500);
+	GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
 
-    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
-    tickTimer_DelayMs(1000);
-    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
-    tickTimer_DelayMs(1000);
-    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
-    tickTimer_DelayMs(1000);
-    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
-    tickTimer_DelayMs(1000);
-    GPIO_TOGGLE(GPIO_PORT_B, GPIO_PIN_07);
-		
-    APP1_Main();
-    while(1) { __nop(); }
+    while(1) {
+        // WDT fed by TMR0_Unit2_IRQHandler every 500ms
+    }
 }

@@ -5,60 +5,60 @@
                           AREA ||i.TMR0_2_IRQHandler||, CODE, READONLY, ALIGN=1
 
                   TMR0_2_IRQHandler PROC
-;;;193    ;;;194    
+;;;211    ;;;212    
 000000  b510              PUSH     {r4,lr}
-;;;195    ;;;196    
+;;;213    ;;;214    
 000002  f7fffffe          BL       TMR0_Unit2_IRQHandler
-;;;197    
+;;;215    
 000006  bd10              POP      {r4,pc}
-;;;198    
+;;;216    
                           ENDP
 
 
                           AREA ||i.TMR0_GetChannelConfig||, CODE, READONLY, ALIGN=1
 
                   TMR0_GetChannelConfig PROC
-;;;34     ;;;35     
+;;;35     ;;;36     
 000000  b510              PUSH     {r4,lr}
-;;;36     
-000002  4604              MOV      r4,r0
 ;;;37     
-000004  b93c              CBNZ     r4,|L2.22|
+000002  4604              MOV      r4,r0
 ;;;38     
+000004  b93c              CBNZ     r4,|L2.22|
+;;;39     
 000006  2042              MOVS     r0,#0x42
 000008  6008              STR      r0,[r1,#0]
-;;;39     
+;;;40     
 00000a  2001              MOVS     r0,#1
 00000c  6010              STR      r0,[r2,#0]
-;;;40     
+;;;41     
 00000e  2004              MOVS     r0,#4
 000010  6018              STR      r0,[r3,#0]
-;;;41     
+;;;42     
 000012  2000              MOVS     r0,#0
                   |L2.20|
-;;;42     ;;;43     ;;;44     ;;;45     ;;;46     ;;;47     ;;;48     
+;;;43     ;;;44     ;;;45     ;;;46     ;;;47     ;;;48     ;;;49     
 000014  bd10              POP      {r4,pc}
                   |L2.22|
-000016  2043              MOVS     r0,#0x43              ;43
-000018  6008              STR      r0,[r1,#0]            ;43
-00001a  f44f3080          MOV      r0,#0x10000           ;44
-00001e  6010              STR      r0,[r2,#0]            ;44
-000020  0080              LSLS     r0,r0,#2              ;45
-000022  6018              STR      r0,[r3,#0]            ;45
-000024  2001              MOVS     r0,#1                 ;46
+000016  2043              MOVS     r0,#0x43              ;44
+000018  6008              STR      r0,[r1,#0]            ;44
+00001a  f44f3080          MOV      r0,#0x10000           ;45
+00001e  6010              STR      r0,[r2,#0]            ;45
+000020  0080              LSLS     r0,r0,#2              ;46
+000022  6018              STR      r0,[r3,#0]            ;46
+000024  2001              MOVS     r0,#1                 ;47
 000026  e7f5              B        |L2.20|
-;;;49     
+;;;50     
                           ENDP
 
 
                           AREA ||i.TMR0_Unit2_DeInit||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_DeInit PROC
-;;;110    ;;;111    
+;;;111    ;;;112    
 000000  b5fe              PUSH     {r1-r7,lr}
-;;;112    
+;;;113    
 000002  4604              MOV      r4,r0
-;;;113    ;;;114    
+;;;114    ;;;115    
 000004  b10c              CBZ      r4,|L3.10|
 000006  2001              MOVS     r0,#1
 000008  e000              B        |L3.12|
@@ -66,39 +66,39 @@
 00000a  2000              MOVS     r0,#0
                   |L3.12|
 00000c  4605              MOV      r5,r0
-;;;115    ;;;116    
+;;;116    ;;;117    
 00000e  466b              MOV      r3,sp
 000010  aa01              ADD      r2,sp,#4
 000012  a902              ADD      r1,sp,#8
 000014  4620              MOV      r0,r4
 000016  f7fffffe          BL       TMR0_GetChannelConfig
 00001a  4606              MOV      r6,r0
-;;;117    ;;;118    
+;;;118    ;;;119    
 00001c  4631              MOV      r1,r6
 00001e  4816              LDR      r0,|L3.120|
 000020  f7fffffe          BL       TMR0_GetCountValue
 000024  4915              LDR      r1,|L3.124|
 000026  f8210015          STRH     r0,[r1,r5,LSL #1]
-;;;119    ;;;120    
+;;;120    ;;;121    
 00002a  4631              MOV      r1,r6
 00002c  4812              LDR      r0,|L3.120|
 00002e  f7fffffe          BL       TMR0_Stop
-;;;121    
+;;;122    
 000032  2200              MOVS     r2,#0
 000034  4810              LDR      r0,|L3.120|
 000036  9900              LDR      r1,[sp,#0]
 000038  f7fffffe          BL       TMR0_IntCmd
-;;;122    
+;;;123    
 00003c  480e              LDR      r0,|L3.120|
 00003e  9901              LDR      r1,[sp,#4]
 000040  f7fffffe          BL       TMR0_ClearStatus
-;;;123    ;;;124    
+;;;124    ;;;125    
 000044  480c              LDR      r0,|L3.120|
 000046  f7fffffe          BL       TMR0_DeInit
-;;;125    ;;;126    
+;;;126    ;;;127    
 00004a  2c01              CMP      r4,#1
 00004c  d112              BNE      |L3.116|
-;;;127    
+;;;128    
 00004e  2007              MOVS     r0,#7
 000050  2800              CMP      r0,#0
 000052  db0b              BLT      |L3.108|
@@ -112,15 +112,15 @@
 000068  f3bf8f6f          ISB      
                   |L3.108|
 00006c  bf00              NOP      
-;;;128    
+;;;129    
 00006e  2007              MOVS     r0,#7
 000070  f7fffffe          BL       __NVIC_ClearPendingIRQ
                   |L3.116|
-;;;129    ;;;130    ;;;131    
+;;;130    ;;;131    ;;;132    
 000074  2000              MOVS     r0,#0
-;;;132    
-000076  bdfe              POP      {r1-r7,pc}
 ;;;133    
+000076  bdfe              POP      {r1-r7,pc}
+;;;134    
                           ENDP
 
                   |L3.120|
@@ -133,11 +133,11 @@
                           AREA ||i.TMR0_Unit2_GetCount||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_GetCount PROC
-;;;169    ;;;170    
+;;;170    ;;;171    
 000000  b570              PUSH     {r4-r6,lr}
-;;;171    
-000002  4604              MOV      r4,r0
 ;;;172    
+000002  4604              MOV      r4,r0
+;;;173    
 000004  b10c              CBZ      r4,|L4.10|
 000006  2001              MOVS     r0,#1
 000008  e000              B        |L4.12|
@@ -145,13 +145,13 @@
 00000a  2000              MOVS     r0,#0
                   |L4.12|
 00000c  4605              MOV      r5,r0
-;;;173    
+;;;174    
 00000e  4629              MOV      r1,r5
 000010  4801              LDR      r0,|L4.24|
 000012  f7fffffe          BL       TMR0_GetCountValue
-;;;174    
-000016  bd70              POP      {r4-r6,pc}
 ;;;175    
+000016  bd70              POP      {r4-r6,pc}
+;;;176    
                           ENDP
 
                   |L4.24|
@@ -160,52 +160,100 @@
                           AREA ||i.TMR0_Unit2_IRQHandler||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_IRQHandler PROC
-;;;175    ;;;176    
-000000  b510              PUSH     {r4,lr}
-;;;177    ;;;178    
+;;;176    ;;;177    
+000000  b570              PUSH     {r4-r6,lr}
+;;;178    ;;;179    
 000002  2101              MOVS     r1,#1
-000004  480b              LDR      r0,|L5.52|
+000004  481a              LDR      r0,|L5.112|
 000006  f7fffffe          BL       TMR0_GetStatus
 00000a  2801              CMP      r0,#1
-00000c  d105              BNE      |L5.26|
-;;;179    
-00000e  2101              MOVS     r1,#1
-000010  4808              LDR      r0,|L5.52|
-000012  f7fffffe          BL       TMR0_ClearStatus
+00000c  d124              BNE      |L5.88|
 ;;;180    
+00000e  2101              MOVS     r1,#1
+000010  4817              LDR      r0,|L5.112|
+000012  f7fffffe          BL       TMR0_ClearStatus
+;;;181    
 000016  f7fffffe          BL       tickTimer_Update
-                  |L5.26|
-;;;181    ;;;182    ;;;183    ;;;184    
-00001a  f44f3180          MOV      r1,#0x10000
-00001e  4805              LDR      r0,|L5.52|
-000020  f7fffffe          BL       TMR0_GetStatus
-000024  2801              CMP      r0,#1
-000026  d103              BNE      |L5.48|
+;;;182    ;;;183    ;;;184    
+00001a  4816              LDR      r0,|L5.116|
+00001c  6800              LDR      r0,[r0,#0]  ; s_wdt_cnt
+00001e  1c40              ADDS     r0,r0,#1
+000020  4914              LDR      r1,|L5.116|
+000022  6008              STR      r0,[r1,#0]  ; s_wdt_cnt
 ;;;185    
-000028  0401              LSLS     r1,r0,#16
-00002a  4802              LDR      r0,|L5.52|
-00002c  f7fffffe          BL       TMR0_ClearStatus
-                  |L5.48|
-;;;186    ;;;187    ;;;188    
-000030  bd10              POP      {r4,pc}
+000024  4608              MOV      r0,r1
+000026  6800              LDR      r0,[r0,#0]  ; s_wdt_cnt
+000028  f5b07ffa          CMP      r0,#0x1f4
+00002c  d314              BCC      |L5.88|
+;;;186    
+00002e  2000              MOVS     r0,#0
+000030  6008              STR      r0,[r1,#0]  ; s_wdt_cnt
+;;;187    
+000032  bf00              NOP      
+000034  4810              LDR      r0,|L5.120|
+000036  4604              MOV      r4,r0
+;;;188    
+000038  2600              MOVS     r6,#0
 ;;;189    
+00003a  4810              LDR      r0,|L5.124|
+00003c  6805              LDR      r5,[r0,#0]
+;;;190    
+00003e  f5b53fd0          CMP      r5,#0x1a000
+000042  d101              BNE      |L5.72|
+;;;191    
+000044  6826              LDR      r6,[r4,#0]
+000046  e003              B        |L5.80|
+                  |L5.72|
+;;;192    
+000048  f5b52f98          CMP      r5,#0x4c000
+00004c  d100              BNE      |L5.80|
+;;;193    
+00004e  6866              LDR      r6,[r4,#4]
+                  |L5.80|
+;;;194    ;;;195    
+000050  b90e              CBNZ     r6,|L5.86|
+;;;196    
+000052  f7fffffe          BL       SWDT_FeedDog
+                  |L5.86|
+;;;197    ;;;198    
+000056  bf00              NOP      
+                  |L5.88|
+;;;199    ;;;200    ;;;201    ;;;202    
+000058  f44f3180          MOV      r1,#0x10000
+00005c  4804              LDR      r0,|L5.112|
+00005e  f7fffffe          BL       TMR0_GetStatus
+000062  2801              CMP      r0,#1
+000064  d103              BNE      |L5.110|
+;;;203    
+000066  0401              LSLS     r1,r0,#16
+000068  4801              LDR      r0,|L5.112|
+00006a  f7fffffe          BL       TMR0_ClearStatus
+                  |L5.110|
+;;;204    ;;;205    ;;;206    
+00006e  bd70              POP      {r4-r6,pc}
+;;;207    
                           ENDP
 
-000032  0000              DCW      0x0000
-                  |L5.52|
+                  |L5.112|
                           DCD      0x40024400
+                  |L5.116|
+                          DCD      s_wdt_cnt
+                  |L5.120|
+                          DCD      0x20026f00
+                  |L5.124|
+                          DCD      0xe000ed08
 
                           AREA ||i.TMR0_Unit2_Init||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_Init PROC
-;;;49     ;;;50     
+;;;50     ;;;51     
 000000  e92d4ff0          PUSH     {r4-r11,lr}
-;;;51     
+;;;52     
 000004  b093              SUB      sp,sp,#0x4c
 000006  4605              MOV      r5,r0
 000008  460c              MOV      r4,r1
 00000a  4616              MOV      r6,r2
-;;;52     ;;;53     ;;;54     ;;;55     ;;;56     ;;;57     ;;;58     
+;;;53     ;;;54     ;;;55     ;;;56     ;;;57     ;;;58     ;;;59     
 00000c  b10d              CBZ      r5,|L6.18|
 00000e  2001              MOVS     r0,#1
 000010  e000              B        |L6.20|
@@ -213,26 +261,26 @@
 000012  2000              MOVS     r0,#0
                   |L6.20|
 000014  4683              MOV      r11,r0
-;;;59     ;;;60     
+;;;60     ;;;61     
 000016  4846              LDR      r0,|L6.304|
 000018  f840402b          STR      r4,[r0,r11,LSL #2]
-;;;61     
+;;;62     
 00001c  ab01              ADD      r3,sp,#4
 00001e  aa02              ADD      r2,sp,#8
 000020  a903              ADD      r1,sp,#0xc
 000022  4628              MOV      r0,r5
 000024  f7fffffe          BL       TMR0_GetChannelConfig
 000028  9004              STR      r0,[sp,#0x10]
-;;;62     ;;;63     
+;;;63     ;;;64     
 00002a  2101              MOVS     r1,#1
 00002c  2002              MOVS     r0,#2
 00002e  f7fffffe          BL       FCG_Fcg2PeriphClockCmd
-;;;64     ;;;65     
+;;;65     ;;;66     
 000032  a805              ADD      r0,sp,#0x14
 000034  f7fffffe          BL       CLK_GetClockFreq
-;;;66     
+;;;67     
 000038  f8dd9020          LDR      r9,[sp,#0x20]
-;;;67     ;;;68     
+;;;68     ;;;69     
 00003c  ea4f1099          LSR      r0,r9,#6
 000040  fba47100          UMULL    r7,r1,r4,r0
 000044  4a3b              LDR      r2,|L6.308|
@@ -240,113 +288,113 @@
 000048  4638              MOV      r0,r7
 00004a  f7fffffe          BL       __aeabi_uldivmod
 00004e  fa1ffa80          UXTH     r10,r0
-;;;69     
+;;;70     
 000052  f1aa0a01          SUB      r10,r10,#1
-;;;70     ;;;71     
+;;;71     ;;;72     
 000056  a80f              ADD      r0,sp,#0x3c
 000058  f7fffffe          BL       TMR0_StructInit
-;;;72     
+;;;73     
 00005c  2000              MOVS     r0,#0
 00005e  900f              STR      r0,[sp,#0x3c]
-;;;73     
+;;;74     
 000060  2060              MOVS     r0,#0x60
 000062  9010              STR      r0,[sp,#0x40]
-;;;74     
+;;;75     
 000064  2000              MOVS     r0,#0
 000066  9011              STR      r0,[sp,#0x44]
-;;;75     
+;;;76     
 000068  fa1ff08a          UXTH     r0,r10
 00006c  f8ad0048          STRH     r0,[sp,#0x48]
-;;;76     ;;;77     
+;;;77     ;;;78     
 000070  aa0f              ADD      r2,sp,#0x3c
 000072  4831              LDR      r0,|L6.312|
 000074  9904              LDR      r1,[sp,#0x10]
 000076  f7fffffe          BL       TMR0_Init
 00007a  b120              CBZ      r0,|L6.134|
-;;;78     
+;;;79     
 00007c  f04f30ff          MOV      r0,#0xffffffff
                   |L6.128|
-;;;79     ;;;80     ;;;81     ;;;82     ;;;83     ;;;84     ;;;85     ;;;86     ;;;87     ;;;88     ;;;89     ;;;90     ;;;91     ;;;92     ;;;93     ;;;94     ;;;95     ;;;96     ;;;97     ;;;98     ;;;99     ;;;100    ;;;101    ;;;102    ;;;103    ;;;104    ;;;105    ;;;106    ;;;107    ;;;108    ;;;109    
+;;;80     ;;;81     ;;;82     ;;;83     ;;;84     ;;;85     ;;;86     ;;;87     ;;;88     ;;;89     ;;;90     ;;;91     ;;;92     ;;;93     ;;;94     ;;;95     ;;;96     ;;;97     ;;;98     ;;;99     ;;;100    ;;;101    ;;;102    ;;;103    ;;;104    ;;;105    ;;;106    ;;;107    ;;;108    ;;;109    ;;;110    
 000080  b013              ADD      sp,sp,#0x4c
 000082  e8bd8ff0          POP      {r4-r11,pc}
                   |L6.134|
 000086  482d              LDR      r0,|L6.316|
-000088  f830201b          LDRH     r2,[r0,r11,LSL #1]    ;81
+000088  f830201b          LDRH     r2,[r0,r11,LSL #1]    ;82
 00008c  482a              LDR      r0,|L6.312|
-00008e  9904              LDR      r1,[sp,#0x10]         ;81
+00008e  9904              LDR      r1,[sp,#0x10]         ;82
 000090  f7fffffe          BL       TMR0_SetCountValue
 000094  4828              LDR      r0,|L6.312|
-000096  9902              LDR      r1,[sp,#8]            ;82
+000096  9902              LDR      r1,[sp,#8]            ;83
 000098  f7fffffe          BL       TMR0_ClearStatus
-00009c  2201              MOVS     r2,#1                 ;83
+00009c  2201              MOVS     r2,#1                 ;84
 00009e  4826              LDR      r0,|L6.312|
-0000a0  9901              LDR      r1,[sp,#4]            ;83
+0000a0  9901              LDR      r1,[sp,#4]            ;84
 0000a2  f7fffffe          BL       TMR0_IntCmd
 0000a6  4826              LDR      r0,|L6.320|
-0000a8  7800              LDRB     r0,[r0,#0]            ;86  ; s_irq_registered
+0000a8  7800              LDRB     r0,[r0,#0]            ;87  ; s_irq_registered
 0000aa  bbc0              CBNZ     r0,|L6.286|
-0000ac  9803              LDR      r0,[sp,#0xc]          ;87
-0000ae  b280              UXTH     r0,r0                 ;87
-0000b0  f8ad0034          STRH     r0,[sp,#0x34]         ;87
-0000b4  2007              MOVS     r0,#7                 ;88
-0000b6  f8ad0036          STRH     r0,[sp,#0x36]         ;88
+0000ac  9803              LDR      r0,[sp,#0xc]          ;88
+0000ae  b280              UXTH     r0,r0                 ;88
+0000b0  f8ad0034          STRH     r0,[sp,#0x34]         ;88
+0000b4  2007              MOVS     r0,#7                 ;89
+0000b6  f8ad0036          STRH     r0,[sp,#0x36]         ;89
 0000ba  4822              LDR      r0,|L6.324|
-0000bc  900e              STR      r0,[sp,#0x38]         ;89
-0000be  a80d              ADD      r0,sp,#0x34           ;91
+0000bc  900e              STR      r0,[sp,#0x38]         ;90
+0000be  a80d              ADD      r0,sp,#0x34           ;92
 0000c0  f7fffffe          BL       INTC_IrqSignIn
 0000c4  b110              CBZ      r0,|L6.204|
-0000c6  f04f30ff          MOV      r0,#0xffffffff        ;92
+0000c6  f04f30ff          MOV      r0,#0xffffffff        ;93
 0000ca  e7d9              B        |L6.128|
                   |L6.204|
-0000cc  2007              MOVS     r0,#7                 ;95
+0000cc  2007              MOVS     r0,#7                 ;96
 0000ce  f7fffffe          BL       __NVIC_ClearPendingIRQ
-0000d2  2007              MOVS     r0,#7                 ;96
-0000d4  2101              MOVS     r1,#1                 ;96
-0000d6  2800              CMP      r0,#0                 ;96
+0000d2  2007              MOVS     r0,#7                 ;97
+0000d4  2101              MOVS     r1,#1                 ;97
+0000d6  2800              CMP      r0,#0                 ;97
 0000d8  db04              BLT      |L6.228|
-0000da  070a              LSLS     r2,r1,#28             ;96
-0000dc  0e13              LSRS     r3,r2,#24             ;96
+0000da  070a              LSLS     r2,r1,#28             ;97
+0000dc  0e13              LSRS     r3,r2,#24             ;97
 0000de  4a1a              LDR      r2,|L6.328|
-0000e0  5413              STRB     r3,[r2,r0]            ;96
+0000e0  5413              STRB     r3,[r2,r0]            ;97
 0000e2  e006              B        |L6.242|
                   |L6.228|
-0000e4  070a              LSLS     r2,r1,#28             ;96
-0000e6  0e17              LSRS     r7,r2,#24             ;96
+0000e4  070a              LSLS     r2,r1,#28             ;97
+0000e6  0e17              LSRS     r7,r2,#24             ;97
 0000e8  4a18              LDR      r2,|L6.332|
-0000ea  f000030f          AND      r3,r0,#0xf            ;96
-0000ee  1f1b              SUBS     r3,r3,#4              ;96
-0000f0  54d7              STRB     r7,[r2,r3]            ;96
+0000ea  f000030f          AND      r3,r0,#0xf            ;97
+0000ee  1f1b              SUBS     r3,r3,#4              ;97
+0000f0  54d7              STRB     r7,[r2,r3]            ;97
                   |L6.242|
-0000f2  bf00              NOP                            ;96
-0000f4  2007              MOVS     r0,#7                 ;97
-0000f6  2800              CMP      r0,#0                 ;97
+0000f2  bf00              NOP                            ;97
+0000f4  2007              MOVS     r0,#7                 ;98
+0000f6  2800              CMP      r0,#0                 ;98
 0000f8  db0d              BLT      |L6.278|
-0000fa  bf00              NOP                            ;97
-0000fc  bf00              NOP                            ;97
-0000fe  f000021f          AND      r2,r0,#0x1f           ;97
-000102  2101              MOVS     r1,#1                 ;97
-000104  4091              LSLS     r1,r1,r2              ;97
-000106  0942              LSRS     r2,r0,#5              ;97
-000108  0092              LSLS     r2,r2,#2              ;97
-00010a  f10222e0          ADD      r2,r2,#0xe000e000     ;97
-00010e  f8c21100          STR      r1,[r2,#0x100]        ;97
-000112  bf00              NOP                            ;97
-000114  bf00              NOP                            ;97
+0000fa  bf00              NOP                            ;98
+0000fc  bf00              NOP                            ;98
+0000fe  f000021f          AND      r2,r0,#0x1f           ;98
+000102  2101              MOVS     r1,#1                 ;98
+000104  4091              LSLS     r1,r1,r2              ;98
+000106  0942              LSRS     r2,r0,#5              ;98
+000108  0092              LSLS     r2,r2,#2              ;98
+00010a  f10222e0          ADD      r2,r2,#0xe000e000     ;98
+00010e  f8c21100          STR      r1,[r2,#0x100]        ;98
+000112  bf00              NOP                            ;98
+000114  bf00              NOP                            ;98
                   |L6.278|
-000116  bf00              NOP                            ;97
-000118  2001              MOVS     r0,#1                 ;99
+000116  bf00              NOP                            ;98
+000118  2001              MOVS     r0,#1                 ;100
 00011a  4909              LDR      r1,|L6.320|
-00011c  7008              STRB     r0,[r1,#0]            ;99
+00011c  7008              STRB     r0,[r1,#0]            ;100
                   |L6.286|
 00011e  4806              LDR      r0,|L6.312|
-000120  9904              LDR      r1,[sp,#0x10]         ;102
+000120  9904              LDR      r1,[sp,#0x10]         ;103
 000122  f7fffffe          BL       TMR0_Start
 000126  b90e              CBNZ     r6,|L6.300|
 000128  f7fffffe          BL       tickTimer_Init
                   |L6.300|
-00012c  2000              MOVS     r0,#0                 ;108
+00012c  2000              MOVS     r0,#0                 ;109
 00012e  e7a7              B        |L6.128|
-;;;110    
+;;;111    
                           ENDP
 
                   |L6.304|
@@ -369,12 +417,12 @@
                           AREA ||i.TMR0_Unit2_Reconfig||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_Reconfig PROC
-;;;133    ;;;134    
+;;;134    ;;;135    
 000000  e92d47f0          PUSH     {r4-r10,lr}
-;;;135    
+;;;136    
 000004  b08c              SUB      sp,sp,#0x30
 000006  4604              MOV      r4,r0
-;;;136    ;;;137    ;;;138    ;;;139    
+;;;137    ;;;138    ;;;139    ;;;140    
 000008  b10c              CBZ      r4,|L7.14|
 00000a  2001              MOVS     r0,#1
 00000c  e000              B        |L7.16|
@@ -382,23 +430,23 @@
 00000e  2000              MOVS     r0,#0
                   |L7.16|
 000010  4681              MOV      r9,r0
-;;;140    ;;;141    
+;;;141    ;;;142    
 000012  ab01              ADD      r3,sp,#4
 000014  aa02              ADD      r2,sp,#8
 000016  a903              ADD      r1,sp,#0xc
 000018  4620              MOV      r0,r4
 00001a  f7fffffe          BL       TMR0_GetChannelConfig
 00001e  4682              MOV      r10,r0
-;;;142    ;;;143    
+;;;143    ;;;144    
 000020  4651              MOV      r1,r10
 000022  4814              LDR      r0,|L7.116|
 000024  f7fffffe          BL       TMR0_Stop
-;;;144    ;;;145    
+;;;145    ;;;146    
 000028  a804              ADD      r0,sp,#0x10
 00002a  f7fffffe          BL       CLK_GetClockFreq
-;;;146    
+;;;147    
 00002e  9d07              LDR      r5,[sp,#0x1c]
-;;;147    ;;;148    
+;;;148    ;;;149    
 000030  4811              LDR      r0,|L7.120|
 000032  f8500029          LDR      r0,[r0,r9,LSL #2]
 000036  09a9              LSRS     r1,r5,#6
@@ -409,29 +457,29 @@
 000042  4638              MOV      r0,r7
 000044  f7fffffe          BL       __aeabi_uldivmod
 000048  b286              UXTH     r6,r0
-;;;149    
+;;;150    
 00004a  1e76              SUBS     r6,r6,#1
-;;;150    ;;;151    
+;;;151    ;;;152    
 00004c  b2b2              UXTH     r2,r6
 00004e  4651              MOV      r1,r10
 000050  4808              LDR      r0,|L7.116|
 000052  f7fffffe          BL       TMR0_SetCompareValue
-;;;152    
+;;;153    
 000056  480a              LDR      r0,|L7.128|
 000058  f8302019          LDRH     r2,[r0,r9,LSL #1]
 00005c  4651              MOV      r1,r10
 00005e  4805              LDR      r0,|L7.116|
 000060  f7fffffe          BL       TMR0_SetCountValue
-;;;153    
+;;;154    
 000064  4651              MOV      r1,r10
 000066  4803              LDR      r0,|L7.116|
 000068  f7fffffe          BL       TMR0_Start
-;;;154    ;;;155    
+;;;155    ;;;156    
 00006c  2000              MOVS     r0,#0
-;;;156    
+;;;157    
 00006e  b00c              ADD      sp,sp,#0x30
 000070  e8bd87f0          POP      {r4-r10,pc}
-;;;157    
+;;;158    
                           ENDP
 
                   |L7.116|
@@ -446,11 +494,11 @@
                           AREA ||i.TMR0_Unit2_Start||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_Start PROC
-;;;157    ;;;158    
+;;;158    ;;;159    
 000000  b570              PUSH     {r4-r6,lr}
-;;;159    
-000002  4604              MOV      r4,r0
 ;;;160    
+000002  4604              MOV      r4,r0
+;;;161    
 000004  b10c              CBZ      r4,|L8.10|
 000006  2001              MOVS     r0,#1
 000008  e000              B        |L8.12|
@@ -458,13 +506,13 @@
 00000a  2000              MOVS     r0,#0
                   |L8.12|
 00000c  4605              MOV      r5,r0
-;;;161    
+;;;162    
 00000e  4629              MOV      r1,r5
 000010  4801              LDR      r0,|L8.24|
 000012  f7fffffe          BL       TMR0_Start
-;;;162    
-000016  bd70              POP      {r4-r6,pc}
 ;;;163    
+000016  bd70              POP      {r4-r6,pc}
+;;;164    
                           ENDP
 
                   |L8.24|
@@ -473,11 +521,11 @@
                           AREA ||i.TMR0_Unit2_Stop||, CODE, READONLY, ALIGN=2
 
                   TMR0_Unit2_Stop PROC
-;;;163    ;;;164    
+;;;164    ;;;165    
 000000  b570              PUSH     {r4-r6,lr}
-;;;165    
-000002  4604              MOV      r4,r0
 ;;;166    
+000002  4604              MOV      r4,r0
+;;;167    
 000004  b10c              CBZ      r4,|L9.10|
 000006  2001              MOVS     r0,#1
 000008  e000              B        |L9.12|
@@ -485,13 +533,13 @@
 00000a  2000              MOVS     r0,#0
                   |L9.12|
 00000c  4605              MOV      r5,r0
-;;;167    
+;;;168    
 00000e  4629              MOV      r1,r5
 000010  4801              LDR      r0,|L9.24|
 000012  f7fffffe          BL       TMR0_Stop
-;;;168    
-000016  bd70              POP      {r4-r6,pc}
 ;;;169    
+000016  bd70              POP      {r4-r6,pc}
+;;;170    
                           ENDP
 
                   |L9.24|
@@ -533,7 +581,9 @@
                           DCD      0x000003e8
                           DCD      0x000003e8
                   s_irq_registered
-00000c  00                DCB      0x00
+00000c  00000000          DCB      0x00,0x00,0x00,0x00
+                  s_wdt_cnt
+                          DCD      0x00000000
 
 ;*** Start embedded assembler ***
 

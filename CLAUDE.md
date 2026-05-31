@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Motor control system based on HC32F460 (Cortex-M4) with RS485/Modbus RTU and CAN/UDS (ISO 14229) communication, supporting firmware-over-the-air (OTA) download. Controls DC motors with Hall sensor feedback, over-current/voltage detection, rotation angle limiting, and fault handling.
 
+**DDL version:** HC32F460 DDL Rev3.3.0 (from `ChangeLog.md`). The LL driver API reflects Rev3.3.0 naming conventions (e.g., `stc_tmr6_init_t`, not older `stc_timer6_init_t`). When referencing DDL APIs, use the Rev3.3.0 header definitions under `drivers/hc32_ll_driver/`.
+
+**License:** See `LICENSE` (HDSC proprietary).
+
 The firmware is split into **three independently-built images** under `ota_ddl3.3_v.1.1/`:
 
 | Image | Directory | Flash Start | Role |
@@ -60,9 +64,15 @@ iconv -f UTF-8 -t GBK file_utf8.c > file.c    # after editing
 
 ## Bootloader Architecture
 
-The bootloader (`boot/`) runs first on every reset. Its logic is in `Bootloader_App.c/h`:
+`Bootloader_App.c/h` is a **shared service module** used by bootloader, APP1, and APP2. It provides power-on checks, WDT/Flash state management, slot switching, and UDS shared-state operations. Each firmware calls the appropriate entry point from its own `main.c`:
 
-### Startup sequence (in `Bootloader_Main()`)
+| Firmware | `main.c` calls | Role |
+|----------|---------------|------|
+| Bootloader | `Boot_StartupSequence()` | Full startup: check UDS state, handle WDT fallback, select slot, jump to APP |
+| APP1 | `App_CheckPendingUdsAck()` + own loop | Check pending UDS ACK, then run application (WDT feed via shared RAM) |
+| APP2 | `App_CheckPendingUdsAck()` + own loop | Same as APP1, uses its own `app2_feed_ctrl` |
+
+### Bootloader startup sequence (`Boot_StartupSequence()` in `Bootloader_App.c`)
 
 1. **Check Shared RAM debug flag** — if set, persist WDT feed control from RAM to Flash
 2. **Check UDS Shared State** — if phase is `UDS_PHASE_ENTER_BOOTLOADER`, enter `Bootloader_UdsMain()` for OTA programming (does not return)
@@ -73,6 +83,15 @@ The bootloader (`boot/`) runs first on every reset. Its logic is in `Bootloader_
 7. **Handle WDT reset** — if WDT/SWDT caused reset, increment WDT count for the current slot. If count ≥ `MAX_WDT_RESET_COUNT` (3), mark slot DISABLED
 8. **Select target slot** — prefer current slot if healthy, otherwise fall back to the other slot, or none if both disabled
 9. **Jump to APP** via `Bootloader_JumpToApp()` — sets MSP, VTOR, then branches to reset vector
+
+### APP startup (each APP's own `main.c`)
+
+1. Set `SCB->VTOR` to its own Flash base address
+2. `Hardware_Init()` — system clock, GPIO, peripherals
+3. `App_CheckPendingUdsAck()` — if OTA just completed, send pending UDS ACK on CAN (e.g., `51 01` for ECU Reset)
+4. Main loop: read WDT feed control from shared RAM, feed SWDT if enabled
+
+**Key point:** `Bootloader_App` does NOT contain `main()` or application main loops. Each firmware's `main.c` owns its own flow.
 
 ### WDT watchdog fallback
 
@@ -240,6 +259,16 @@ Typical sequence: START (0x0001) → FWD (0x0011) → STOP (0x0002)
 - **Stack safety:** `flash_download.c` uses global `g_fw_ram_buffer[60KB]` — do not replace with stack allocation
 - 1ms timing: `isotp_ms_update()`, `uds_ms_update()`, `isotp_tx_process()` must be called exactly once per millisecond, gated by `tickTimer_GetCount()` change detection
 - **CAN debug macros** in main.c: `CAN_HEARTBEAT_ENABLE` (0/1), `CANIF_ECHO_ENABLE` (0/1), `UDS_CAN_ENABLE` (0/1) — currently all disabled in bootloader/APP1/APP2
+
+## Known Security Findings
+
+From `安全审查报告.md` (security audit, Chinese):
+
+- **CRC write overflow (Critical):** `ModbusRTU_SendResponse` writes 2-byte CRC at `raw[len]` / `raw[len+1]` without checking `len + 2 <= 256`. The buffer is 256 bytes; `len` can reach 253, so it's currently safe by 1 byte, but lacks a defensive guard.
+- **Unbounded `memcpy` (Critical):** `ModbusRTU_ProcessFrame` does `memcpy(m_stcTxFrame.raw, frame, len)` without checking `len <= 256`. The caller constrains `frameBuf` to 256 bytes so it's safe in practice, but the function itself is unprotected.
+- **Send error reporting (High):** `Comm_HAL_Send` returns `bool` — on failure there's no distinction between "busy" and "queue full". Consider logging or an enum return type.
+
+When touching Modbus/Comm_HAL code, add bounds checks rather than relying on caller-side constraints.
 
 ## Documentation
 

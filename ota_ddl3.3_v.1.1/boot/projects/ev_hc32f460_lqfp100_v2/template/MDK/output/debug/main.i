@@ -25627,16 +25627,14 @@ void Bootloader_UdsMain(void);
 
 
 
-void Bootloader_Main(void);                
-void APP1_Main(void);                      
-void APP2_Main(void);                      
+void Boot_StartupSequence(void);                
 
 void InitSharedCtrl(void);
 void Bootloader_Init(void);
 int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
 void DisableAllNVICInterrupts(void);
 void Bootloader_JumpToApp(uint32_t u32AppAddr);
-void APP_SwitchAndRunOther(void);
+void Boot_SwitchAndRunOther(void);
 void Bootloader_Delay(uint32_t u32Count);
 
 uint32_t GetWdtResetCount(uint32_t u32Addr);
@@ -25769,6 +25767,6 @@ int main(void)
     tickTimer_DelayMs(1000);
     GPIO_TogglePins((0x01U), (0x0040U));
 
-    Bootloader_Main();
+    Boot_StartupSequence();
     while(1) { __nop(); }
 }

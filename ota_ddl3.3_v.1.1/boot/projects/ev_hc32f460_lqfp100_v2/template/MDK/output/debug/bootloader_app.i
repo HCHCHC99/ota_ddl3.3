@@ -20937,16 +20937,14 @@ void Bootloader_UdsMain(void);
 
 
 
-void Bootloader_Main(void);                
-void APP1_Main(void);                      
-void APP2_Main(void);                      
+void Boot_StartupSequence(void);                
 
 void InitSharedCtrl(void);
 void Bootloader_Init(void);
 int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
 void DisableAllNVICInterrupts(void);
 void Bootloader_JumpToApp(uint32_t u32AppAddr);
-void APP_SwitchAndRunOther(void);
+void Boot_SwitchAndRunOther(void);
 void Bootloader_Delay(uint32_t u32Count);
 
 uint32_t GetWdtResetCount(uint32_t u32Addr);
@@ -25421,7 +25419,7 @@ void ClearAllRAM(void)
     __isb(0xF);
 }
 
-void APP_SwitchAndRunOther(void)
+void Boot_SwitchAndRunOther(void)
 {
     uint32_t curr = READ_FLASH_DIRECT(0x7C000);
     uint32_t target = (curr == 0x5A5A5A5Au) ? 0xA5A5A5A5u : 0x5A5A5A5Au;
@@ -25441,7 +25439,7 @@ void APP_SwitchAndRunOther(void)
 
 void Bootloader_Init(void) {}
 
-void Bootloader_Main(void)
+void Boot_StartupSequence(void)
 {
     stc_boot_context_t stcCtx;
     memset(&stcCtx, 0, sizeof(stc_boot_context_t));
@@ -25837,197 +25835,4 @@ void App_CheckPendingUdsAck(void)
      
     UdsShared_Clear();
     SEGGER_RTT_printf(LOG_CH_MAIN, "\033[36m" "[%s] " "  UDS shared state cleared\r\n" "\033[0m" "\r\n", "MAIN");
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-volatile uint8_t g_u8Debug_JumpOther = 0;
-volatile uint32_t g_u32DrvStatus = 0;
-
-
-
-
-
-
-
-static void Timer01B_CallBack(void);
-static void timer0_Init(uint32_t us);
-static void SystemClk_Init(void);
-
-static void Timer01B_CallBack(void)
-{
-    TMR0_ClearStatus(((CM_TMR0_TypeDef *)(0x40024000UL)), ((0x00010000UL)));
-    GPIO_TogglePins((0x01U), (0x0080U));
-}
-
-static void timer0_Init(uint32_t us)
-{
-    stc_tmr0_init_t t;
-    stc_irq_signin_config_t i;
-    memset(&(t), 0, sizeof(t)); memset(&(i), 0, sizeof(i));
-    stc_clock_freq_t tmp; CLK_GetClockFreq(&tmp);
-    uint32_t pclk = tmp.u32Pclk1Freq;
-
-    FCG_Fcg2PeriphClockCmd(((0x00000001UL)), ENABLE);
-    t.u32Func = (0UL);
-    t.u32ClockSrc = (0UL);
-    t.u32ClockDiv = (6UL << (4U));
-    t.u16CompareValue = (uint16_t)(((uint64_t)(us)*pclk/64)/1000000U) - 1;
-    TMR0_Init(((CM_TMR0_TypeDef *)(0x40024000UL)), (1UL), &t);
-
-    TMR0_ClearStatus(((CM_TMR0_TypeDef *)(0x40024000UL)), ((0x00010000UL)));
-    TMR0_IntCmd(((CM_TMR0_TypeDef *)(0x40024000UL)), ((0x00040000UL)), ENABLE);
-
-    i.enIRQn = (INT009_IRQn);
-    i.enIntSrc = (INT_SRC_TMR0_1_CMP_B);
-    i.pfnCallback = Timer01B_CallBack;
-    INTC_IrqSignIn(&i);
-
-    __NVIC_ClearPendingIRQ((INT009_IRQn));
-    __NVIC_SetPriority((INT009_IRQn), (7UL));
-    __NVIC_EnableIRQ((INT009_IRQn));
-    TMR0_Start(((CM_TMR0_TypeDef *)(0x40024000UL)), (1UL));
-}
-
-static void SystemClk_Init(void)
-{
-    LL_PERIPH_WE((1UL << 6U));
-    CLK_SetClockDiv((((0x00000007UL)) | ((0x00000070UL)) | ((0x00000700UL)) | ((0x00007000UL)) | ((0x00070000UL)) | ((0x00700000UL)) | ((0x07000000UL))),
-        ((0x00U) << (24U))  | ((0x01U) << (20U)) |
-        ((0x00U) << (0U)) | ((0x01U) << (4U)) |
-        ((0x02U) << (8U)) | ((0x02U) << (12U)) |
-        ((0x01U) << (16U)));
-
-    CLK_HrcCmd(ENABLE);
-    CLK_SetPLLSrc((0x01UL));
-    EFM_REG_Unlock(); EFM_SetWaitCycle((5U << (4U))); EFM_REG_Lock();
-    while(CLK_GetStableStatus(((0x01U))) != SET);
-    CLK_SetSysClockSrc((0x00U));
-    LL_PERIPH_WP((1UL << 6U));
-}
-
-void APP1_Main(void)
-{
-    stc_gpio_init_t p;
-    uint32_t wdt;
-
-    RMU_ClearStatus();
-    memset(&(p), 0, sizeof(p)); p.u16PinDir = ((0x0002U));
-    LL_PERIPH_WE((1UL << 2U));
-    GPIO_Init((0x01U), (0x0080U), &p);
-    LL_PERIPH_WP((1UL << 2U));
-
-    stc_shared_ctrl_t *share = GetSharedCtrl();
-    SystemClk_Init();
-    timer0_Init(1000);
-    __enable_irq();
-
-    while(1) {
-        if (g_u8Debug_JumpOther) { g_u8Debug_JumpOther=0; APP_SwitchAndRunOther(); }
-        wdt = share->app1_feed_ctrl;
-        if (wdt == 0x00000000u) SWDT_FeedDog();
-        if (g_u32DrvStatus != 0) APP_SwitchAndRunOther();
-    }
-}
-
-
-
-
-volatile uint8_t g_u8Debug_JumpOther_APP2 = 0;
-volatile uint32_t g_u32DrvStatus_APP2 = 0;
-
-
-
-
-
-static void Timer01B_CallBack_APP2(void);
-static void timer0_Init_APP2(uint32_t us);
-static void SystemClk_Init_APP2(void);
-
-static void Timer01B_CallBack_APP2(void)
-{
-    TMR0_ClearStatus(((CM_TMR0_TypeDef *)(0x40024000UL)), ((0x00010000UL)));
-    GPIO_TogglePins((0x01U), (0x0040U));
-}
-
-static void timer0_Init_APP2(uint32_t us)
-{
-    stc_tmr0_init_t t;
-    stc_irq_signin_config_t i;
-    memset(&(t), 0, sizeof(t)); memset(&(i), 0, sizeof(i));
-    stc_clock_freq_t tmp; CLK_GetClockFreq(&tmp);
-    uint32_t pclk = tmp.u32Pclk1Freq;
-
-    FCG_Fcg2PeriphClockCmd(((0x00000001UL)), ENABLE);
-    t.u32Func = (0UL);
-    t.u32ClockSrc = (0UL);
-    t.u32ClockDiv = (6UL << (4U));
-    t.u16CompareValue = (uint16_t)(((uint64_t)(us)*pclk/64)/1000000U) - 1;
-    TMR0_Init(((CM_TMR0_TypeDef *)(0x40024000UL)), (1UL), &t);
-
-    TMR0_ClearStatus(((CM_TMR0_TypeDef *)(0x40024000UL)), ((0x00010000UL)));
-    TMR0_IntCmd(((CM_TMR0_TypeDef *)(0x40024000UL)), ((0x00040000UL)), ENABLE);
-
-    i.enIRQn = (INT009_IRQn);
-    i.enIntSrc = (INT_SRC_TMR0_1_CMP_B);
-    i.pfnCallback = Timer01B_CallBack_APP2;
-    INTC_IrqSignIn(&i);
-
-    __NVIC_ClearPendingIRQ((INT009_IRQn));
-    __NVIC_SetPriority((INT009_IRQn), (5UL));
-    __NVIC_EnableIRQ((INT009_IRQn));
-    TMR0_Start(((CM_TMR0_TypeDef *)(0x40024000UL)), (1UL));
-}
-
-static void SystemClk_Init_APP2(void)
-{
-    LL_PERIPH_WE((1UL << 6U));
-    CLK_SetClockDiv((((0x00000007UL)) | ((0x00000070UL)) | ((0x00000700UL)) | ((0x00007000UL)) | ((0x00070000UL)) | ((0x00700000UL)) | ((0x07000000UL))),
-        ((0x00U) << (24U))  | ((0x01U) << (20U)) |
-        ((0x00U) << (0U)) | ((0x01U) << (4U)) |
-        ((0x02U) << (8U)) | ((0x02U) << (12U)) |
-        ((0x01U) << (16U)));
-
-    CLK_HrcCmd(ENABLE);
-    CLK_SetPLLSrc((0x01UL));
-    EFM_REG_Unlock(); EFM_SetWaitCycle((5U << (4U))); EFM_REG_Lock();
-    while(CLK_GetStableStatus(((0x01U))) != SET);
-    CLK_SetSysClockSrc((0x00U));
-    LL_PERIPH_WP((1UL << 6U));
-}
-
-void APP2_Main(void)
-{
-    stc_gpio_init_t p;
-    uint32_t wdt;
-
-    RMU_ClearStatus();
-    memset(&(p), 0, sizeof(p)); p.u16PinDir = ((0x0002U));
-    LL_PERIPH_WE((1UL << 2U));
-    GPIO_Init((0x01U), (0x0040U), &p);
-    LL_PERIPH_WP((1UL << 2U));
-
-    stc_shared_ctrl_t *share = GetSharedCtrl();
-    SystemClk_Init_APP2();
-    timer0_Init_APP2(1000);
-    __enable_irq();
-
-    while(1) {
-        if (g_u8Debug_JumpOther_APP2) { g_u8Debug_JumpOther_APP2=0; APP_SwitchAndRunOther(); }
-        wdt = share->app2_feed_ctrl;
-        if (wdt == 0x00000000u) SWDT_FeedDog();
-        if (g_u32DrvStatus_APP2 != 0) APP_SwitchAndRunOther();
-    }
 }

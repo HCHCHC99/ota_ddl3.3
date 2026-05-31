@@ -146,16 +146,14 @@ void Bootloader_UdsMain(void);
 //                          ����ʽ�㡿����ӿں���
 // ###########################################################################
 // ###########################################################################
-void Bootloader_Main(void);                // Bootloader �����
-void APP1_Main(void);                      // APP1 �������
-void APP2_Main(void);                      // APP2 �������
+void Boot_StartupSequence(void);                // Bootloader �����
 
 void InitSharedCtrl(void);
 void Bootloader_Init(void);
 int32_t Bootloader_FlashEraseSector(uint32_t u32Addr);
 void DisableAllNVICInterrupts(void);
 void Bootloader_JumpToApp(uint32_t u32AppAddr);
-void APP_SwitchAndRunOther(void);
+void Boot_SwitchAndRunOther(void);
 void Bootloader_Delay(uint32_t u32Count);
 
 uint32_t GetWdtResetCount(uint32_t u32Addr);

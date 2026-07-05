@@ -1,8 +1,52 @@
 # Flash Partition Layout
 
+> **相关文档:** [flash操作.md](flash操作.md) — Flash 函数全集 | [OTA-flash补充.md](OTA-flash补充.md) — OTA 跳转参数 & 空闲扇区
+
 ## Overview
 
-HC32F460xE: 512KB Flash (`0x00000000` – `0x0007FFFF`), sector size `0x2000` (8KB).
+HC32F460xE: 512KB Flash (`0x00000000` – `0x0007FFFF`), 64 sectors, sector size `0x2000` (8KB).
+
+---
+
+## 各模块扇区占用一览
+
+```
+扇区    地址        归属                     FlashAdvanced视角      实际写入方式
+────     ────        ────                     ────────────────      ──────────
+ 0-7    0x00000     Bootloader (256KB)        保护区 (0-12)         直接操作 EFM
+ 8      0x10000     UDS Shared State          保护区 (0-12)         Bootloader_App.c 直接写
+ 9      0x12000     FlashAdvanced 管理记录     保护区 (0-12)         FlashAdvanced 自己维护
+10      0x14000     预留                       保护区 (0-12)         无
+11      0x16000     APP1 WDT State            保护区 (0-12)         Bootloader_App.c 直接写
+12      0x18000     APP2 WDT State            保护区 (0-12)         Bootloader_App.c 直接写
+────     ────        ────                     ────────────────      ──────────
+13-37   0x1A000     APP1 固件 (196KB)         有效用户区 (13-61)    烧录 / 直接运行
+38-43   0x4C000     APP2 OTA 固件 (48KB)      有效用户区 (13-61)    FlashDownload (经 FlashAdvanced)
+44-55   0x58000     空闲 (96KB)               有效用户区 (13-61)    无
+56-61   0x70000     param_manager (48KB)      有效用户区 (13-61)    param_manager (绕过 FlashAdvanced)
+────     ────        ────                     ────────────────      ──────────
+62      0x7C000     APP_RUN_SLOT              灰色地带 (非有效非保护) Bootloader_App.c 直接写
+63      0x7E000     硬保护 (不可操作)          单独保护              无
+```
+
+### FlashAdvanced 分区定义 (`flash_advanced.h`)
+
+```c
+#define FLASH_ADV_PROTECTED_SECTOR_START  0    // 保护区: 扇区 0-12
+#define FLASH_ADV_PROTECTED_SECTOR_END   12
+#define FLASH_ADV_PROTECTED_SECTOR       63    // 单独保护扇区 63
+
+#define FLASH_ADV_VALID_SECTOR_START     13    // 有效用户区: 扇区 13-61
+#define FLASH_ADV_VALID_SECTOR_END       61
+```
+
+**扇区 62 归属分析：** 不在保护区 (0-12, 63)、也不在有效用户区 (13-61)，属于灰色地带。FlashAdvanced 不会操作它（`FLASH_ADV_IS_SECTOR_WRITABLE(62)` 返回 false），由 `Bootloader_App.c` 独占写入 `APP_RUN_SLOT` 标记。
+
+**param_manager 穿透问题：** `param_manager` 绕过 FlashAdvanced，直接调用 `hc32f46x_flash.c` 底层函数。修改前 `SEC_START=62` 越界写入扇区 62，与 `APP_RUN_SLOT` 冲突；修改后 `SEC_START=61`，与 FlashAdvanced 的有效用户区边界一致。
+
+---
+
+## Flash 分区详图
 
 ```
 0x00000000 +===========================================================+
@@ -11,9 +55,7 @@ HC32F460xE: 512KB Flash (`0x00000000` – `0x0007FFFF`), sector size `0x2000` (8
            |  UDS OTA programming mode (Bootloader_UdsMain)             |
            |  Source: boot/projects/.../Bootloader_App/                 |
 0x00020000 +-----------------------------------------------------------+
-           |                    BOOTLOADER (reserved)                    |
-           |  128KB allocated in linker script                           |
-           |  Unused flash space for bootloader growth                  |
+           |                    BOOTLOADER (reserved, 128KB)             |
 0x00040000 +-----------------------------------------------------------+
            |                    UNUSED / RESERVED (64KB)                 |
 0x00050000 +-----------------------------------------------------------+
@@ -28,54 +70,49 @@ HC32F460xE: 512KB Flash (`0x00000000` – `0x0007FFFF`), sector size `0x2000` (8
            |                    UNUSED / RESERVED (64KB)                 |
 0x000F0000 +-----------------------------------------------------------+
            |                    UNUSED / RESERVED (64KB)                 |
-0x00010000 +-- UDS Shared State (8KB) ---------------------------------+
+0x00010000 +-- UDS Shared State (8KB, sector 8) -----------------------+
            |  stc_uds_shared_t (56 bytes): magic, phase, target_slot,   |
            |  fw_size, fw_crc, result, pending_sid                      |
            |  Written by: UdsShared_Write() in Bootloader_App.c         |
-           |  Written from: 0x11 handler (Bootloader), 0x31 handler     |
-           |                 (APP), FlashDownload completion            |
-           |  Read by: App_CheckPendingUdsAck() (APP startup),          |
-           |           Boot_StartupSequence() (Bootloader startup)      |
-0x00012000 +-----------------------------------------------------------+
+           |  Read by: App_CheckPendingUdsAck() / Boot_StartupSequence  |
+0x00012000 +-- FlashAdvanced Management Record (8KB, sector 9) --------+
+           |  Erase counts per-sector, lifetime statistics              |
+           |  Magic: 0x5A5A5A5A, stored by FlashAdv_SaveLifetimeInfo()  |
+0x00014000 +-----------------------------------------------------------+
            |                    UNUSED / RESERVED (16KB)                 |
-0x00016000 +-- APP1 State Sector (8KB) --------------------------------+
+0x00016000 +-- APP1 State Sector (8KB, sector 11) ---------------------+
            |  Offset +0x000: WDT feed control (WDT_FEED_ENABLE/DISABLE) |
            |  Offset +0x008: WDT reset count (max 3 => slot disabled)   |
            |  Written by: SetWdtFeedControl(), UpdateWdtResetCount()    |
            |  Read by: InitAppInfo() in Boot_StartupSequence()          |
-0x00018000 +-- APP2 State Sector (8KB) --------------------------------+
-           |  Offset +0x000: WDT feed control (WDT_FEED_ENABLE/DISABLE) |
-           |  Offset +0x008: WDT reset count (max 3 => slot disabled)   |
+0x00018000 +-- APP2 State Sector (8KB, sector 12) ---------------------+
            |  Same structure as APP1 state sector                       |
 0x0001A000 +===========================================================+
-           |                    APP1 FIRMWARE (196KB)                    |
+           |                    APP1 FIRMWARE (196KB, sectors 13-37)    |
            |  Slot A: motor control application                         |
            |  VTOR = 0x0001A000 (APP1_START_ADDR)                       |
-           |  Source: app1/projects/.../                                |
            |  LED debug: PB7 toggle 5 times                             |
 0x0004B000 +-----------------------------------------------------------+
            |                    UNUSED (4KB)                             |
 0x0004C000 +===========================================================+
-           |                    APP2 FIRMWARE (196KB)                    |
-           |  Slot B: identical to APP1 (backup / OTA target)           |
+           |                    APP2 FIRMWARE (196KB, sectors 38-61)    |
+           |  Slot B: backup / OTA target                               |
            |  VTOR = 0x0004C000 (APP2_START_ADDR)                       |
-           |  Source: app2/projects/.../                                |
+           |  OTA actual usage: 48KB (sectors 38-43 only)               |
            |  LED debug: PB7 toggle 2 times                             |
-           |  OTA download target: UDS_TARGET_FLASH_ADDR                |
-0x0007B000 +-----------------------------------------------------------+
-           |                    UNUSED (4KB)                             |
-0x0007C000 +-- APP_RUN_SLOT Sector (8KB) ------------------------------+
-           |  Slot magic at offset 0x000:                               |
-           |    SLOT_A_MAGIC = 0x5A5A5A5A => boot APP1                 |
-           |    SLOT_B_MAGIC = 0xA5A5A5A5 => boot APP2                 |
+0x0007C000 +-- APP_RUN_SLOT Sector (8KB, sector 62) -------------------+
+           |  Offset 0x000: SLOT_A_MAGIC(0x5A5A5A5A) or                 |
+           |                SLOT_B_MAGIC(0xA5A5A5A5)                    |
            |  Written by: Boot_SetRunSlotToAddr(), Boot_SwitchAndRun()  |
            |  Read by: GetCurrentSlot() in Boot_StartupSequence()       |
 0x0007E000 +-----------------------------------------------------------+
-           |                    UNUSED (8KB)                             |
+           |                    PROTECTED (8KB, sector 63, 不可操作)     |
 0x00080000 +===========================================================+
 ```
 
-## Key Macros (defined in Bootloader_App.h)
+---
+
+## 关键宏定义 (`Bootloader_App.h`)
 
 ```
 +---------------------------+----------------+------------------------------------------+
@@ -93,85 +130,89 @@ HC32F460xE: 512KB Flash (`0x00000000` – `0x0007FFFF`), sector size `0x2000` (8
 +---------------------------+----------------+------------------------------------------+
 ```
 
-## Code-to-Flash Mapping
+---
+
+## OTA 相关关键变量及存放位置
+
+### Flash 中的 OTA 变量
+
+| 变量 / 结构 | 扇区 | 地址 | 大小 | 读写者 | 说明 |
+|------------|------|------|------|--------|------|
+| `stc_uds_shared_t` | 8 | `0x10000` | 56B | Bootloader_App.c | OTA 共享状态：magic, phase, target_slot, fw_size, fw_crc, result, pending_sid |
+| `APP_RUN_SLOT` magic | 62 | `0x7C000` | 4B | Bootloader_App.c | `0x5A5A5A5A`→启 APP1, `0xA5A5A5A5A`→启 APP2 |
+| APP2 固件 | 38-43 | `0x4C000` | 48KB | FlashDownload | OTA 下载目标 (`UDS_TARGET_FLASH_ADDR`) |
+| FlashAdvanced 管理记录 | 9 | `0x12000` | ~540B | FlashAdvanced | 每扇区擦除计数、寿命统计 |
+
+### UDS Shared State 结构 (`stc_uds_shared_t`) 详细字段
+
+| 字段 | 偏移 | 说明 |
+|------|------|------|
+| `magic` | +0 | `0x55445300` ("UDS\0")，验证数据有效性 |
+| `phase` | +4 | OTA 阶段：IDLE / DOWNLOADING / VERIFYING / COMPLETE / ERROR |
+| `target_slot` | +8 | 目标槽位 (APP1 或 APP2) |
+| `fw_size` | +12 | 固件总大小 (bytes) |
+| `fw_crc` | +16 | 固件 CRC32 校验值 |
+| `result` | +20 | OTA 结果：SUCCESS / CRC_ERROR / SIZE_ERROR / FLASH_ERROR |
+| `pending_sid` | +24 | 待响应的 UDS Service ID (0x11 / 0x31) |
+
+### OTA 流程中涉及的 Flash 操作
 
 ```
-+----------------------+------------------------------------+-----------------------------+
-| Flash Region         | Related Code / Module              | Key Functions               |
-+----------------------+------------------------------------+-----------------------------+
-| 0x00000000 (Boot)    | Bootloader_App.c/h                 | Boot_StartupSequence()      |
-|                      |                                    | Bootloader_JumpToApp()      |
-|                      |                                    | Bootloader_UdsMain()        |
-|                      |                                    | Boot_SetRunSlotToAddr()     |
-|                      |                                    | Boot_SwitchAndRunOther()    |
-|                      |                                    | GetCurrentSlot()            |
-|                      |                                    | SelectTargetSlot()          |
-+----------------------+------------------------------------+-----------------------------+
-| 0x00010000 (UDS Sh.) | Bootloader_App.c                   | UdsShared_Read()            |
-|                      |                                    | UdsShared_Write()           |
-|                      |                                    | UdsShared_Clear()           |
-|                      |                                    | UdsShared_SetPhase()        |
-|                      |                                    | App_CheckPendingUdsAck()    |
-|                      +------------------------------------+-----------------------------+
-|                      | UDS/uds_diagnostic.c               | uds_handle_ecu_reset()      |
-|                      |                                    | uds_handle_routine_control()|
-+----------------------+------------------------------------+-----------------------------+
-| 0x00016000 (APP1 St) | Bootloader_App.c                   | SetWdtFeedControl()         |
-|                      |                                    | GetWdtFeedControl()         |
-|                      |                                    | UpdateWdtResetCount()       |
-|                      |                                    | GetWdtResetCount()          |
-|                      |                                    | ClearWdtResetCount()        |
-|                      |                                    | InitAppInfo()               |
-+----------------------+------------------------------------+-----------------------------+
-| 0x00018000 (APP2 St) | Bootloader_App.c                   | (same functions as APP1)    |
-+----------------------+------------------------------------+-----------------------------+
-| 0x0001A000 (APP1)    | app1/projects/.../                 | Whole application firmware  |
-|                      | Bootloader_App.c (shared module)   | App_CheckPendingUdsAck()    |
-|                      | main.c                             | main() - APP1 startup       |
-+----------------------+------------------------------------+-----------------------------+
-| 0x0004C000 (APP2)    | app2/projects/.../                 | Whole application firmware  |
-|                      | Bootloader_App.c (shared module)   | App_CheckPendingUdsAck()    |
-|                      | main.c                             | main() - APP2 startup       |
-|                      +------------------------------------+-----------------------------+
-|                      | FlashDownload (OTA target)         | UDS_TARGET_FLASH_ADDR       |
-|                      |                                    | FW_APP_START_ADDR           |
-+----------------------+------------------------------------+-----------------------------+
-| 0x0007C000 (Slot)    | Bootloader_App.c                   | Boot_SetRunSlotToAddr()     |
-|                      |                                    | Boot_SwitchAndRunOther()    |
-|                      |                                    | GetCurrentSlot()            |
-+----------------------+------------------------------------+-----------------------------+
+OTA 开始
+  → 0x34 RequestDownload: FlashDownload 擦除 APP2 区域 (扇区 38-43, 48KB)
+  → 0x36 TransferData:    数据缓冲到 60KB RAM, 满后 FlashAdv_BulkWriteSimple → APP2 Flash
+  → 0x37 TransferExit:    最终冲刷缓冲区, CRC32 校验
+  → UdsShared_SetPhase(COMPLETE): 写 UDS Shared State (扇区 8)
+  → 0x11 ECU Reset:
+       App_CheckPendingUdsAck() 读到 COMPLETE
+       → UdsShared_SetPhase(IDLE) 清除
+       → Boot_SwitchAndRunOther() 写 APP_RUN_SLOT (扇区 62) → NVIC_SystemReset()
 ```
 
-## Shared RAM Layout (not Flash, but related)
+### RAM 中的 OTA 变量
 
-```
-0x1FFF8000 +-- RAM_START_ADDR -----------------------------------------+
-           |                    RAM (188KB)                              |
-           |                    Main stack + data + BSS                 |
-0x1FFFAF00 +-- SHARED_CTRL_ADDR (top of RAM - 0x100) ------------------+
-           |  stc_shared_ctrl_t (32 bytes):                             |
-           |    app1_feed_ctrl: WDT_FEED_ENABLE(0) or DISABLE(0xDEADBEEF)|
-           |    app2_feed_ctrl: WDT_FEED_ENABLE(0) or DISABLE(0xDEADBEEF)|
-           |    debug_flag: WDT feed persistence across debugger resets  |
-           |  Accessed via GetSharedCtrl() inline function               |
-           |  Used by: TMR0_Unit2_IRQHandler (WDT feeding decision)     |
-0x1FFFAF20 +-- RAM_END_ADDR -------------------------------------------+
-```
-
-## Sector Erase Notes
-
-- All Flash writes require sector erase first (8KB granularity)
-- `Boot_SetRunSlotToAddr()` erases `APP_RUN_SLOT_ADDR` sector (0x7C000), writes 1 word
-- `UdsShared_Write()` erases `UDS_SHARED_SECTOR_BASE` sector (0x10000), writes 56 bytes
-- `FlashDownload` erases APP2 sectors (0x4C000–0x57000 range, 48KB max)
-- `SetWdtFeedControl()` / `UpdateWdtResetCount()` erase APPx state sectors (8KB each)
-- **No two functions share erase on the same sector** — `UDS_SHARED_SECTOR_BASE` ≠ `APPx_STATE_SECTOR_BASE`
+| 变量 | 位置 | 大小 | 说明 |
+|------|------|------|------|
+| `FlashDownloadContext_t` | BSS (boot) | ~100B | OTA 状态机上下文 |
+| `FW_RAM_BUFFER` | BSS (boot) | 60KB | OTA 数据缓冲 (地址 `0x1FFF0000` 附近) |
+| `stc_shared_ctrl_t` | `0x1FFFAF00` | 32B | WDT 喂狗控制 (app1/app2 feed_ctrl + debug_flag) |
+| `g_ParamDebug` | BSS | ~20B | param_manager 调试信息 |
 
 ---
 
-## Flash Management Code Modules
+## Flash 写入数据流 (所有 Flash 修改路径)
 
-### Overview (4 layers)
+> 详细函数级说明见 [flash操作.md](flash操作.md)
+
+```
+UDS OTA 固件下载 (经 FlashAdvanced):
+  CAN RX → ISOTP → uds_receive_handler → uds_dl_if_t.on_transfer_data
+    → FlashDownload_OnTransferData → RAM buffer (60KB)
+    → FlashDownload_Task() → FlashDownload_FlushBuffer
+    → FlashAdv_BulkWriteSimple → FlashAdv_IsProtected() 检查
+    → hc32f46x_flash.c (.ramfunc) → EFM 硬件
+
+UDS Shared State (绕过 FlashAdvanced):
+  0x11/0x31 handler → UdsShared_SetPhase/Write
+    → EFM_REG_Unlock → EFM_SectorErase(0x10000) → EFM_ProgramWord×14 → EFM_REG_Lock
+
+WDT State (绕过 FlashAdvanced):
+  TMR0_Unit2_IRQHandler → UpdateWdtResetCount
+    → Read both values → EFM_Erase → Write both values back
+
+Slot Selection (绕过 FlashAdvanced):
+  Boot_StartupSequence → Boot_SetRunSlotToAddr / UpdateSlotFlagToFlash
+    → EFM_Erase(0x7C000) → EFM_ProgramWord(magic)
+
+Parameter Save (绕过 FlashAdvanced):
+  APP code → Param_Save → Internal_Erase → hc32f46x_flash.c (.ramfunc) → EFM
+```
+
+**关键点：** FlashAdvanced 只保护通过它的调用路径 (FlashDownload OTA 写入)。`Bootloader_App.c` 和 `param_manager.c` 直接调用底层 `hc32f46x_flash.c` / EFM，不受 FlashAdvanced 保护。
+
+---
+
+## Flash 管理层级 (4 层架构)
 
 ```
 +------------------+  uds_diagnostic.c   (UDS protocol dispatch)
@@ -189,428 +230,200 @@ HC32F460xE: 512KB Flash (`0x00000000` – `0x0007FFFF`), sector size `0x2000` (8
 
 ---
 
-### 1. `hc32f46x_flash.c` / `.h` — Low-level Flash Adapter
+### 1. `hc32f46x_flash.c` / `.h` — 底层 Flash 适配器 (无分区逻辑)
 
-**Location:** `boot/Adp/`, `app1/Adp/`, `app2/Adp/`
+**位置:** `boot/Adp/`, `app1/Adp/`, `app2/Adp/` (三个项目内容一致)
 
-**Purpose:** Wraps HC32F460 DDL EFM driver with unified status codes and debug macros.
-
-**Key API:**
-
+**API:**
 ```
-HC32FLASH_EraseSector(addr)            // Erase 8KB sector (runs from RAM, .ramfunc)
-HC32FLASH_WritedWord_NoCheck(addr,data)// Write 1 word, no read-back verify
-HC32FLASH_WritedWord_Check(addr,data)  // Write 1 word with read-back verify (runs from RAM, .ramfunc)
-HC32FLASH_ReaddWord(addr)             // Direct read (bypasses cache)
-HC32FLASH_GetStatus()                 // WPRERR/PGAERR/PEWERR/COLERR/PGMISMTCH
+HC32FLASH_EraseSector(addr)            // 擦除 8KB 扇区 (.ramfunc)
+HC32FLASH_WritedWord_NoCheck(addr,data)// 写 1 字, 不回读校验
+HC32FLASH_WritedWord_Check(addr,data)  // 写 1 字 + 回读校验 (.ramfunc)
+HC32FLASH_ReaddWord(addr)             // 直接读 (绕过 cache)
+HC32FLASH_GetStatus()                 // 错误标志: WPRERR/PGAERR/PEWERR/COLERR/PGMISMTCH
 ```
 
-**Limitations:**
-- Erase & checked-write MUST execute from RAM (`.ramfunc` section) — HC32F460 cannot run code from Flash while erasing/writing the same Flash bank
-- Erase granularity is always 8KB (hardware sector size), no sub-sector erase
-- Erase sets all bits to 1; program can only clear bits to 0 (Flash physics)
-- Write without read-back check is faster but less safe — use only when caller verifies
-- `FLASH_DEBUG_ENABLE` compile flag gates debug output (per-project Options → C/C++ → Define)
+**无任何地址保护** — 传入什么地址就操作什么地址。
 
 ---
 
-### 2. `flash_advanced.c` / `.h` — Flash Sector Protection & Statistics
+### 2. `flash_advanced.c` / `.h` — Flash 保护与统计层 (分区逻辑所在)
 
-**Location:** `boot/Adp/`, `app1/Adp/`, `app2/Adp/`
+**位置:** `boot/Adp/`, `app1/Adp/`, `app2/Adp/` (三个项目内容一致)
 
-**Purpose:** Protection layer above `hc32f46x_flash.c`. Tracks erase counts per-sector, enforces protected regions, supports bulk writes, and persists lifetime info to sector 9 (0x12000).
-
-**Protected sectors (macros in flash_advanced.h):**
-
-```
-+--------+--------+---------------------------------------+
-| Sector | Addr   | What                                  |
-+--------+--------+---------------------------------------+
-|  0-7   | 0x00000| Bootloader (128KB)                    |
-|    8   | 0x10000| UDS Shared State                      |
-| 9-10   | 0x12000| Reserved (9 = management record)      |
-| 11-12  | 0x16000| APP1/APP2 WDT State                   |
-|   63   | 0x7E000| Extra protected (unused, guard)       |
-+--------+--------+---------------------------------------+
-```
-
-**Valid user sectors (writable by FlashDownload):** 13-61 (0x1A000-0x7BFFF)
-
-**Key API:**
-
-```
-FlashAdv_Create(config, ops)         // Create handle with config + ops table
-FlashAdv_EraseSector(handle, addr)   // Protected-sector check + erase
-FlashAdv_BulkWriteSimple(handle, addr, data, words) // Multi-word write
-FlashAdv_IsAddressProtected(handle, addr)           // Protection check
-FlashAdv_GetLifetimeInfo(handle, info)              // Erase counts per-sector
-FlashAdv_SaveLifetimeInfo(handle)                   // Persist to sector 9
-```
-
-**Limitations:**
-- `FlashAdvConfig_t.max_erase_cycles` set to 10000 (typical HC32F460 endurance), only advisory — no hardware enforcement
-- Management record in sector 9 (0x12000): if this sector wears out, lifetime tracking is lost but flash operations still work
-- Sector 63 is hard-protected by macro (`FLASH_ADV_PROTECTED_SECTOR 63`), treated as never-writable
-- `FLASH_MANAGEMENT_RECORD_ENABLE` compile flag controls whether lifetime data is persisted
-
----
-
-### 3. `Bootloader_App.c` / `.h` — Bootloader Flash Operations (shared module)
-
-**Location:** All 3 projects share identical code via `boot/projects/.../Bootloader_App/`, `app1/.../Bootloader_App/`, `app2/.../Bootloader_App/`
-
-**Purpose:** Central flash management for boot logic. Handles UDS shared state, WDT state, slot selection, and boot-to-app transitions.
-
-**Flash functions & their sectors:**
-
-| Function | Flash Sector | Writes | Erases |
-|----------|-------------|--------|--------|
-| `READ_FLASH_DIRECT(addr)` | (any) | No | No (bypasses cache for clean read) |
-| `Bootloader_FlashEraseSector(addr)` | (any) | No | Yes (generic wrapper) |
-| `UdsShared_Read(pState)` | 8 (0x10000) | No | No (reads 56 bytes via READ_FLASH_DIRECT) |
-| `UdsShared_Write(pState)` | 8 (0x10000) | Yes (56 bytes) | Yes (full sector) |
-| `UdsShared_Clear()` | 8 (0x10000) | No | Yes (full sector) |
-| `UdsShared_SetPhase(phase, slot)` | 8 (0x10000) | Yes (56 bytes) | Yes (full sector) |
-| `GetWdtFeedControl(addr)` | 11 or 12 (0x16000/0x18000) | No | No |
-| `SetWdtFeedControl(addr, val)` | 11 or 12 | Yes (2 words) | Yes (full sector) |
-| `GetWdtResetCount(addr)` | 11 or 12 | No | No |
-| `UpdateWdtResetCount(addr, cnt)` | 11 or 12 | Yes (2 words) | Yes (full sector) |
-| `ClearWdtResetCount(addr)` | 11 or 12 | Yes (2 words) | Yes (full sector) |
-| `ClearAppStateBySlot(slot)` | 11 or 12 | Yes (2 words) | Yes (full sector) |
-| `Boot_SetRunSlotToAddr(addr)` | 62 (0x7C000) | Yes (1 word) | Yes (full sector) |
-| `Boot_SwitchAndRunOther()` | 62 (0x7C000) | Yes (1 word) | Yes (full sector) |
-| `UpdateSlotFlagToFlash(ctx)` | 62 (0x7C000) | Yes (1 word) | Yes (full sector) |
-
-**Common pattern (all write functions):**
-```
-EFM_REG_Unlock() → EFM_FWMC_Cmd(ENABLE) → wait RDY → EFM_SectorErase() → EFM_ProgramWord() × N → EFM_REG_Lock()
-```
-
-**Key protocol: Read-before-erase for WDT state sectors:**
-- APPx state sector stores TWO values: `WDT_FEED_CONTROL` at offset +0x000, `WDT_COUNT` at offset +0x008
-- Before erase, BOTH values are read into local variables
-- After erase, BOTH values are written back (one possibly modified)
-- This avoids data loss from the value NOT being modified
-
-**Limitations:**
-- `READ_FLASH_DIRECT()` temporarily disables Flash cache, making consecutive reads slow
-- WDT state functions erase the entire 8KB sector to modify just 2 words (wear concern, but WDT resets are rare)
-- `APP_RUN_SLOT` sector (0x7C000) is sector 62 — overlaps with `param_manager` sector range (56-62), see sector conflict analysis below
-- `UDS_POST_FLASH_BOOT_ADDR` is hardcoded to `APP1_START_ADDR` — no runtime config
-- `UDS_TARGET_FLASH_ADDR` is hardcoded to `APP2_START_ADDR` — OTA always flashes APP2
-- No wear-leveling for UDS shared sector (0x10000) — only erased during OTA (rare)
-- `Boot_SwitchAndRunOther()` calls `NVIC_SystemReset()` directly — uses SYSRESETREQ (breaks J-Link connection)
-
----
-
-### 4. `flash_download.c` / `.h` — OTA Firmware Download Module
-
-**Location:** `boot/UDS/` (only in bootloader — bootloader is the sole flash writer during OTA)
-
-**Purpose:** Manages the OTA firmware download state machine. Receives blocks via UDS 0x34/0x36/0x37, buffers in 60KB RAM, writes to Flash when buffer is full or transfer ends.
-
-**State machine:**
-```
-IDLE → PREPARING → READY → TRANSFERRING → VERIFYING → COMPLETE
-  ↑        ↓           ↓          ↓            ↓           |
-  +--------+-----------+----------+------------+------ ERROR
-```
-
-**Key configuration (compile-time):**
-
-| Macro | Default | Meaning |
-|-------|---------|---------|
-| `FW_APP_START_ADDR` | 0x0004C000 | OTA target = APP2 |
-| `FW_APP_MAX_SIZE` | 0x0000C000 | Max firmware = 48KB |
-| `FW_RAM_BUFFER_SIZE` | 60 × 1024 | RAM buffer (not on stack, aligned to 4) |
-| `FW_FLASH_WRITE_ENABLED` | 1 | Safety switch: 0 = dry-run (no real flash write) |
-| `TBOX_ADDR_START` | 0x08004000 | TBOX sends this address range |
-| `MAP_TBOX_ADDR_TO_FLASH(addr)` | — | Maps 0x08004xxx → 0x0004Cxxx |
-
-**Key internal structure (FlashDownloadContext_t):**
-- `state / last_error` — state machine tracking
-- `target_address / total_size / received_size` — download progress
-- `buffer_offset` — position in 60KB RAM buffer
-- `expected_sequence` — block sequence validation (1-255)
-- `flash_handle` — FlashAdv handle for sector protection + erase/write
-- `rx_crc` — running CRC32 of received firmware
-
-**Key API (called by UDS layer via uds_dl_bridge):**
-
-```
-FlashDownload_Init(config)           // Init state machine + FlashAdv handle
-FlashDownload_OnRequestDownload(addr, size) // UDS 0x34: validate + erase range
-FlashDownload_OnTransferData(seq, data, len)// UDS 0x36: buffer + write if full
-FlashDownload_OnTransferExit()       // UDS 0x37: final flush + CRC verify
-FlashDownload_Task()                 // Main loop: process async operations
-FlashDownload_GetState()             // Current state
-FlashDownload_IsPending()            // true → send NRC 0x78 (Response Pending)
-```
-
-**Limitations:**
-- `FW_RAM_BUFFER_SIZE` = 60KB is a large static allocation (BSS), reduces available heap/stack
-- `FW_FLASH_WRITE_ENABLED = 0` is a compile-time switch, not runtime — requires rebuild to change
-- Only supports single-block flash write (buffer fills, write happens, buffer empties) — no concurrent receive+write
-- Block sequence counter wraps at 255 (uint8_t) — no guard against wrap-around replay
-- `FlashDownload_Task()` runs in main `while(1)` loop — blocks other tasks during flash erase/write (erase ~20ms, write ~4ms per 60KB)
-- TBOX address mapping assumes TBOX always sends 0x08004xxx for APP2 — no support for flashing APP1 via OTA
-- No resume after power-loss: if reset during TRANSFERRING, partial flash content + state lost
-- `auto_reset_on_complete` defaults to 0 (disabled) — reset is handled by 0x11 ECU Reset service instead
-
----
-
-### 5. `uds_dl_bridge.c` + `uds_dl_if.h` — UDS Download Interface Bridge
-
-**Location:** `boot/UDS/`
-
-**Purpose:** Decouples UDS protocol layer from flash_download implementation. Uses a function pointer table (`uds_dl_if_t`) so the UDS layer can work with any download backend (firmware, data, configuration).
-
-**Architecture:**
-```
-uds_diagnostic.c → uds_dl_get_if()->on_request_download(...)
-                        ↓
-                  uds_dl_bridge.c → flash_download.c
-```
-
-**Key types:**
-
-| UDS Layer | Flash Layer |
-|-----------|-------------|
-| `uds_dl_result_t` | `FlashDownloadResult_t` |
-| `uds_dl_state_t` | `FlashDownloadState_t` |
-| `uds_dl_progress_t` | `FlashDownloadProgress_t` |
-
-**Key functions:**
-```
-uds_dl_init_fw()                // Register firmware download interface (called at boot)
-uds_dl_register(iface)         // Set active download interface
-uds_dl_get_if()                // Get current interface (NULL if not registered)
-uds_dl_is_registered()         // Check if any interface is active
-```
-
-**Supported DID readback (via 0x22 service):**
-
-| DID | Value | Function |
-|-----|-------|----------|
-| 0xF000 | Firmware version | `FlashDownload_GetFirmwareVersion()` |
-| 0xF001 | Bootloader version | `FlashDownload_GetBootloaderVersion()` |
-| 0xF002 | Firmware CRC32 | `FlashDownload_GetFirmwareCRC()` |
-
-**Limitations:**
-- Only ONE download interface can be registered at a time (single `g_dl_iface` pointer)
-- `dl_fw_init()` ignores `config_data`/`config_len` — always calls `FlashDownload_Init(NULL)` which uses defaults
-- No support for multiple simultaneous download types (firmware + data)
-
----
-
-### 6. `param_manager.c` / `.h` — Wear-Leveled Parameter Storage
-
-**Location:** `boot/Utils/`, `app1/Utils/`, `app2/Utils/`
-
-**Purpose:** Store application parameters (motor config, calibration data) in Flash with wear-leveling across 7 sectors. Survives power cycles and firmware updates.
-
-**Sector layout:**
-```
-Sector 62 ←── SEC_START (highest priority, try first)
-Sector 61
-Sector 60
-Sector 59
-Sector 58
-Sector 57
-Sector 56 ←── SEC_END
-All sectors: 0x70000 - 0x7DFFF (7 × 8KB = 56KB)
-```
-
-**Per-sector data format:**
-```
-+------------------+
-| Magic Head       | 0x55AA55AA
-| Sequence ID      | incrementing, for wear-leveling
-| Erase Count      | lifetime tracking
-| Parameter Data   | user-defined struct (size from Param_Config_t)
-| CRC32 / Checksum |
-| Magic Tail       | 0xAA44AA44
-+------------------+
-```
-
-**Wear-leveling algorithm:**
-- On init: scan sectors 62→56, find valid block with highest sequence ID (most recent), copy data to RAM
-- On save: write to NEXT sector (current - 1, wrapping from 56→62), with incremented sequence
-- If all sectors full: erase current sector, rewrite — effectively round-robin
-- Erase count tracked per write, persisted in sector structure
-
-**Key API:**
-```
-Param_Init(pConfig, pSetDefaults)   // Init: scan Flash, load valid params (or set defaults)
-Param_Save(pConfig)                 // Write current params to next available sector
-Param_Debug_EraseAll(pConfig, pDefaults) // Debug: erase all param sectors
-```
-
-**Key configuration (Param_Config_t):**
-- `pParamBuf` — pointer to RAM parameter struct
-- `paramSize` — size of struct in bytes (must fit in one 8KB sector)
-- `magicHead / magicTail` — validation magic numbers
-- `checksumOffset / seqOffset / eraseCntOffset` — field offsets within struct
-
-**Limitations:**
-- Only ONE parameter struct type per `Param_Config_t` instance (single-purpose)
-- Parameter struct must fit in one sector (≤ 8KB minus headers = ~8KB usable)
-- Sectors 56-62 overlap with APP_RUN_SLOT sector (62 at 0x7C000) — param_manager and Bootloader_App slot management MUST NOT write concurrently. In practice: Bootloader writes slot only during boot, APP writes params during normal operation. If the bootloader ever uses param_manager, conflict is possible.
-- Sector 61 (0x7A000-0x7BFFF) overlaps with tail of APP2 firmware area — APP2 firmware size must not exceed sectors 38-60 (184KB) if param_manager is in use
-- No wear-leveling across the 10000-cycle endurance limit of each sector — after 7 × 10000 = 70000 total saves, Flash endurance is exhausted
-- `Internal_Erase()` uses `hc32f46x_flash.c` directly (not FlashAdvanced), so no protection check — could theoretically erase a protected sector if misconfigured
-- `PARAM_DEBUG` is gated by compile flag — must enable to see wear statistics
-
----
-
-### Sector Conflict / Coexistence Analysis
-
-```
-Sector   Address     Assigned To              Notes
-------   -------     ------------              -----
-  8      0x10000     UDS Shared State          Exclusive. Only written during OTA.
- 11      0x16000     APP1 WDT State            Exclusive. Read-before-erase for 2 values.
- 12      0x18000     APP2 WDT State            Exclusive. Read-before-erase for 2 values.
- 38-55   0x4C000     APP2 Firmware (OTA)       Written by FlashDownload during OTA only.
- 56-60   0x70000     param_manager             Wear-leveled params. APP2 firmware must stop
-                                               before sector 56 (0x70000) to avoid overlap.
- 61      0x7A000     param_manager (shared)    Last param sector. Conflicts with APP2 if
-                                               APP2 > 184KB (0x2E000).
- 62      0x7C000     APP_RUN_SLOT + param      SLOT magic at offset 0x000 (1 word). param_manager
-                                               may use this sector for parameter storage. The two
-                                               systems must be coordinated:
-                                               - Boot writes slot magic during boot sequence
-                                               - APP writes params during normal operation
-                                               - Each must read-before-erase the other's data
-                                               - Currently: no coordination code exists
- 63      0x7E000     Protected (unused)        FlashAdvanced hard-protects this sector.
-```
-
----
-
-### Compile-Time Safety Gates
-
-| Macro | File | 0 = Safe | 1 = Active |
-|-------|------|----------|------------|
-| `FW_FLASH_WRITE_ENABLED` | flash_download.h | No real flash writes (dry-run) | Real writes enabled |
-| `FLASH_DEBUG_ENABLE` | hc32f46x_flash.h | No debug output | Print status per operation |
-| `FLASH_MANAGEMENT_RECORD_ENABLE` | flash_advanced.h | No lifetime tracking | Persist erase counts |
-| `PARAM_DEBUG` | param_manager.h | No debug output | Print scan/wear info |
-
----
-
-### Flash Write Flow Summary (all paths to Flash modification)
-
-```
-UDS OTA Flow:
-  CAN RX → ISOTP → uds_receive_handler → uds_dl_if_t.on_transfer_data
-    → FlashDownload_OnTransferData → buffer in RAM (60KB)
-    → FlashDownload_Task() → FlashDownload_FlushBuffer
-    → FlashAdv_BulkWriteSimple → hc32f46x_flash.c (.ramfunc) → EFM
-
-UDS Shared State:
-  0x11/0x31 handler → UdsShared_SetPhase/Write
-    → EFM_REG_Unlock → EFM_SectorErase(UDS_SHARED_SECTOR_BASE) → EFM_ProgramWord×14 → EFM_REG_Lock
-
-WDT State Update:
-  TMR0_Unit2_IRQHandler (WDT timeout) → UpdateWdtResetCount
-    → Read both values → EFM_Erase → Write both values back
-
-Slot Selection:
-  Boot_StartupSequence → Boot_SetRunSlotToAddr / UpdateSlotFlagToFlash
-    → EFM_Erase(APP_RUN_SLOT_ADDR) → EFM_ProgramWord(magic)
-
-Parameter Save:
-  Application code → Param_Save → find next sector → Internal_Erase → ProgramWord×N
-```
-
----
-
-## Partition Optimization Recommendations (分区优化建议)
-
-### Current Problem
-
-Two modules share sector 62 (0x7C000) without coordination code:
-
-| Module | Sector | Address | What It Writes |
-|--------|--------|---------|----------------|
-| `param_manager` | 56-62 | 0x70000-0x7DFFF | Parameter struct (with magic/CRC) |
-| `Bootloader_App` | 62 | 0x7C000 offset 0x000 | SLOT_A_MAGIC or SLOT_B_MAGIC (1 word) |
-
-Both erase the entire sector before writing their data. If one writes after the other, the first writer's data is lost. Currently there is no read-before-erase coordination between these two modules.
-
-### Key Context
-
-OTA download only uses **6 sectors** (38-43, 0x4C000-0x57FFF, 48KB). Sectors 44-55 (0x58000-0x6FFFF, 96KB) are completely unused. The "196KB APP2 partition" in the linker script is an allocation ceiling, not actual usage.
-
-### Plan A: Minimal Fix (recommended for now)
-
-**Change:** `param_manager.c` line 5 — `SEC_START` from `62` to `61`
+**分区定义 (`flash_advanced.h`):**
 
 ```c
-// Before:
-#define SEC_START           62
-// After:
-#define SEC_START           61
+// 保护区
+#define FLASH_ADV_PROTECTED_SECTOR_START  0    // 扇区 0-12: Bootloader+UDS+WDT+预留
+#define FLASH_ADV_PROTECTED_SECTOR_END   12
+#define FLASH_ADV_PROTECTED_SECTOR       63    // 扇区 63: 硬保护
+
+// 有效用户区
+#define FLASH_ADV_VALID_SECTOR_START     13    // 扇区 13-61: APP1+APP2+param_manager
+#define FLASH_ADV_VALID_SECTOR_END       61
+
+// 管理记录: 扇区 9 (0x12000)
+#define FLASH_ADV_MANAGEMENT_SECTOR       9
 ```
 
-**Result:**
-```
-Sector   Address     Owner                   Size
-------   -------     -----                   ----
- 44-55   0x58000     FREE (unused)           96KB
- 56-61   0x70000     param_manager only      6×8KB=48KB
- 62      0x7C000     APP_RUN_SLOT only       8KB
- 63      0x7E000     Protected (guard)       8KB
+**保护宏:**
+```c
+// 扇区是否受保护 (0-12 或 63)
+#define FLASH_ADV_IS_SECTOR_PROTECTED(sector) \
+    (((sector) >= 0 && (sector) <= 12) || (sector) == 63)
+
+// 扇区是否可写 (在有效区 13-61 且不受保护)
+#define FLASH_ADV_IS_SECTOR_WRITABLE(sector) \
+    ((sector) >= 13 && (sector) <= 61 && !FLASH_ADV_IS_SECTOR_PROTECTED(sector))
 ```
 
-| Pros | Cons |
-|------|------|
-| Only 1 line changed | param_manager loses 1 sector (7→6) |
-| No FlashAdvanced changes needed | 6 sectors × 10K = 60K writes still sufficient |
-| Zero risk of side effects | |
-| Sector 63 stays as safety boundary | |
-
-**Files to change:** `param_manager.c` × 3 projects (boot, app1, app2)
+**操作流程 (EraseSector 为例):**
+```
+FlashAdv_EraseSector(handle, addr)
+  → FlashAdv_IsValid(addr)       // 地址在总范围内?
+  → FlashAdv_IsProtected(addr)   // 扇区 0-12 或 63? → 拒绝, 返回 FLASH_ADV_PROTECTED
+  → hc32f46x_flash.c 执行实际擦除
+  → FlashAdv_UpdateLifetime()    // 更新擦除计数, 持久化到扇区 9
+```
 
 ---
 
-### Plan B: Clean Architecture (if more space needed later)
+### 3. `Bootloader_App.c` / `.h` — Bootloader Flash 操作 (绕过 FlashAdvanced)
 
-**Changes:**
+**位置:** 三个项目共享相同代码
 
-| File | Change |
-|------|--------|
-| `Bootloader_App.h` | `APP_RUN_SLOT_ADDR`: `0x7C000` → `0x7E000` |
-| `flash_advanced.h` | `FLASH_ADV_PROTECTED_SECTOR`: `63` → remove or set to invalid |
-| `param_manager.c` | No change (keep `SEC_START 62`) |
+**职责:** UDS 共享状态、WDT 状态、槽位选择、启动跳转。
 
-**Result:**
-```
-Sector   Address     Owner                   Size
-------   -------     -----                   ----
- 44-55   0x58000     FREE (unused)           96KB
- 56-62   0x70000     param_manager only      7×8KB=56KB
- 63      0x7E000     APP_RUN_SLOT only       8KB
-```
+| 函数 | 扇区 | 操作 |
+|------|------|------|
+| `UdsShared_Read/Write/Clear/SetPhase` | 8 (0x10000) | 读写 56 字节 UDS 状态 |
+| `GetWdtFeedControl/SetWdtFeedControl` | 11 或 12 | 读写 WDT 喂狗控制 |
+| `UpdateWdtResetCount/ClearWdtResetCount` | 11 或 12 | 读写 WDT 复位计数 |
+| `Boot_SetRunSlotToAddr/Boot_SwitchAndRunOther` | 62 (0x7C000) | 写 1 字 Slot Magic |
 
-| Pros | Cons |
-|------|------|
-| param_manager keeps 7 sectors | 3 files changed |
-| Sector 63 becomes useful instead of wasted | FlashAdvanced protection change has wider impact |
-| Clean conceptual separation | Need to verify FlashAdvanced doesn't rely on sector 63 protection |
-| 7 sectors × 10K = 70K writes | |
-
-**Files to change:** `Bootloader_App.h` × 3, `flash_advanced.h` × 3, `param_manager.c` × 3
+**WDT 扇区读-擦-写协议:** 扇区中存两个值 (偏移 +0 和 +8)，擦除前先读出两个值，擦除后两个值一起写回，避免数据丢失。
 
 ---
 
-### Additional Observations (not urgent)
+### 4. `flash_download.c` / `.h` — OTA 固件下载模块 (经 FlashAdvanced)
 
-1. **Sectors 44-55 are free (96KB):** Could be used for a second OTA slot, data logging partition, or expanded param_manager range without touching APP2's current 48KB footprint.
+**位置:** `boot/UDS/` (仅 bootloader)
 
-2. **APP2 linker script claims 196KB but OTA only writes 48KB:** Consider reducing the APP2 partition in the linker script to match the actual OTA size, freeing sectors 44-55 explicitly.
+**状态机:** `IDLE → PREPARING → READY → TRANSFERRING → VERIFYING → COMPLETE`
 
-3. **Sector 9 (0x12000) management record:** Currently used by FlashAdvanced for lifetime tracking. If this sector wears out, only statistics are lost — flash operations continue normally. Consider migrating this to the free area (sectors 44-55) if endurance becomes a concern.
+**关键配置:**
+| 宏 | 默认值 | 含义 |
+|----|--------|------|
+| `FW_APP_START_ADDR` | `0x0004C000` | OTA 目标 = APP2 |
+| `FW_APP_MAX_SIZE` | `0x0000C000` | 最大固件 = 48KB (6 扇区) |
+| `FW_RAM_BUFFER_SIZE` | 60KB | RAM 缓冲区 |
+| `FW_FLASH_WRITE_ENABLED` | 1 | 0 = 干运行 (不真写 Flash) |
 
-4. **No concurrent-write guard:** There is no mutex or flag preventing `param_manager` and `Bootloader_App` from erasing the same sector simultaneously in different interrupt contexts. This is mitigated by the fact that Bootloader runs exclusively (no APP code executing), and param_manager is only called by APP code.
+**API (由 UDS 层通过 uds_dl_bridge 调用):**
+```
+FlashDownload_OnRequestDownload(addr, size)  // 0x34: 校验 + 擦除目标区域
+FlashDownload_OnTransferData(seq, data, len) // 0x36: 缓冲 + 满时写 Flash
+FlashDownload_OnTransferExit()               // 0x37: 最终冲刷 + CRC 校验
+```
+
+---
+
+### 5. `uds_dl_bridge.c` — UDS 下载接口桥
+
+**架构:** `uds_diagnostic.c → uds_dl_get_if() → uds_dl_bridge.c → flash_download.c`
+
+使用函数指针表 (`uds_dl_if_t`) 解耦 UDS 协议层和 Flash 下载实现。
+
+**DID 读回 (0x22 服务):**
+| DID | 内容 |
+|-----|------|
+| 0xF000 | 固件版本 |
+| 0xF001 | Bootloader 版本 |
+| 0xF002 | 固件 CRC32 |
+
+---
+
+### 6. `param_manager.c` / `.h` — 磨损均衡参数存储 (绕过 FlashAdvanced)
+
+**位置:** `boot/Utils/`, `app1/Utils/`, `app2/Utils/` (三个项目内容一致)
+
+**扇区配置 (已修复):**
+```c
+#define SEC_START  61   // 修改前: 62 → 修改后: 61 ✅
+#define SEC_END    56
+// 使用扇区 56-61, 6 × 8KB = 48KB, 地址范围 0x70000-0x7BFFF
+```
+
+**磨损均衡算法:** 扫描 61→56 找最高 SeqID → 写入下一扇区 (递减, 56 回绕到 61) → 扇区满时擦除当前扇区重用。
+
+**注意:** `Internal_Erase()` 直接调用 `hc32f46x_flash.c`，不经 FlashAdvanced，无保护检查。
+
+---
+
+## 扇区冲突与修复
+
+### 问题
+
+修改前 `param_manager` 和 `Bootloader_App` 共享扇区 62：
+
+| 模块 | 扇区 | 写入内容 |
+|------|------|---------|
+| `param_manager` | 56-**62** | 参数结构体 (含 magic/CRC) |
+| `Bootloader_App` | **62** | APP_RUN_SLOT Magic (1 word) |
+
+两者都整扇区擦除后写入，无互斥协调 → 后写者覆盖先写者的数据。
+
+### 修复: Plan A ✅ (已实施)
+
+```c
+// param_manager.c 第 5 行, 三个项目各改 1 处:
+// 修改前: #define SEC_START  62
+// 修改后: #define SEC_START  61
+```
+
+**修复后布局:**
+```
+扇区    地址        归属                  大小
+────     ────        ────                  ────
+56-61   0x70000     param_manager 独占     6×8KB = 48KB
+62      0x7C000     APP_RUN_SLOT 独占      8KB
+63      0x7E000     硬保护 (不可操作)       8KB
+```
+
+**一致性验证:**
+
+| 模块 | 定义 | 扇区范围 | 一致? |
+|------|------|---------|-------|
+| `flash_advanced.h` | `VALID_SECTOR_END = 61` | 13-61 | — |
+| `param_manager.c` | `SEC_START = 61, SEC_END = 56` | 56-61 | ✅ |
+| `Bootloader_App.h` | `APP_RUN_SLOT_ADDR = 0x7C000` | 62 | ✅ |
+
+---
+
+## 编译安全开关
+
+| 宏 | 文件 | 0 | 1 |
+|----|------|---|---|
+| `FW_FLASH_WRITE_ENABLED` | flash_download.h | 干运行 (不真写) | 真实 Flash 写入 |
+| `FLASH_DEBUG_ENABLE` | hc32f46x_flash.h | 无调试输出 | 打印每次操作状态 |
+| `FLASH_MANAGEMENT_RECORD_ENABLE` | flash_advanced.h | 无寿命追踪 | 持久化擦除计数 |
+| `PARAM_DEBUG` | param_manager.h | 无调试输出 | 打印扫描/磨损信息 |
+
+---
+
+## Shared RAM Layout
+
+```
+0x1FFF8000 +-- RAM_START_ADDR -----------------------------------------+
+           |                    RAM (188KB)                              |
+           |                    Main stack + data + BSS                 |
+0x1FFFAF00 +-- SHARED_CTRL_ADDR (top of RAM - 0x100) ------------------+
+           |  stc_shared_ctrl_t (32 bytes):                             |
+           |    app1_feed_ctrl: WDT_FEED_ENABLE(0) or DISABLE(0xDEADBEEF)|
+           |    app2_feed_ctrl: WDT_FEED_ENABLE(0) or DISABLE(0xDEADBEEF)|
+           |    debug_flag: WDT feed persistence across debugger resets  |
+           |  Accessed via GetSharedCtrl() inline function               |
+           |  Used by: TMR0_Unit2_IRQHandler (WDT feeding decision)     |
+0x1FFFAF20 +-- RAM_END_ADDR -------------------------------------------+
+```
